@@ -5,8 +5,10 @@ ChromaDB wrapper with Ollama embeddings for storing and searching document chunk
 
 import chromadb
 import requests
-from concurrent.futures import ThreadPoolExecutor
+import time
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
+from tqdm import tqdm
 
 
 class DocumentVectorStore:
@@ -60,19 +62,34 @@ class DocumentVectorStore:
     def _get_embeddings_parallel(
         self,
         texts: list[str],
-        max_workers: int = 2
+        max_workers: int = 2,
+        show_progress: bool = True
     ) -> list[list[float]]:
-        """Get embeddings for multiple texts in parallel."""
+        """Get embeddings for multiple texts in parallel with progress bar."""
+        embeddings = [None] * len(texts)
+
         with ThreadPoolExecutor(max_workers=max_workers) as executor:
-            embeddings = list(executor.map(self._get_single_embedding, texts))
+            futures = {executor.submit(self._get_single_embedding, text): i
+                      for i, text in enumerate(texts)}
+
+            iterator = as_completed(futures)
+            if show_progress:
+                iterator = tqdm(iterator, total=len(texts), desc="    Embedding",
+                               unit="chunk", leave=False)
+
+            for future in iterator:
+                idx = futures[future]
+                embeddings[idx] = future.result()
+
         return embeddings
 
     def add_document(
         self,
         doc_id: str,
         chunks: list[str],
-        metadata: dict = None
-    ) -> int:
+        metadata: dict = None,
+        show_progress: bool = True
+    ) -> tuple[int, float]:
         """
         Add document chunks to the vector store.
 
@@ -80,15 +97,16 @@ class DocumentVectorStore:
             doc_id: Unique document identifier (usually filename)
             chunks: List of text chunks
             metadata: Optional metadata to attach to chunks
+            show_progress: Show progress bar during embedding
 
         Returns:
-            Number of chunks added
+            Tuple of (number of chunks added, time taken in seconds)
         """
         if not chunks:
-            return 0
+            return 0, 0.0
 
-        print(f"Embedding {len(chunks)} chunks for '{doc_id}'...")
-        embeddings = self._get_embeddings_parallel(chunks)
+        start_time = time.time()
+        embeddings = self._get_embeddings_parallel(chunks, show_progress=show_progress)
 
         # Filter out failed embeddings (None values)
         valid_data = [
@@ -98,8 +116,8 @@ class DocumentVectorStore:
         ]
 
         if not valid_data:
-            print(f"  No valid embeddings for '{doc_id}'")
-            return 0
+            elapsed = time.time() - start_time
+            return 0, elapsed
 
         valid_chunks = [d[0] for d in valid_data]
         valid_embeddings = [d[1] for d in valid_data]
@@ -111,19 +129,23 @@ class DocumentVectorStore:
             for i in valid_indices
         ]
 
-        self.collection.add(
-            ids=ids,
-            embeddings=valid_embeddings,
-            documents=valid_chunks,
-            metadatas=metadatas
-        )
+        # ChromaDB has a max batch size limit (~5461), so batch inserts
+        BATCH_SIZE = 5000
+        total_items = len(ids)
 
-        skipped = len(chunks) - len(valid_chunks)
-        if skipped > 0:
-            print(f"  Added {len(valid_chunks)} chunks from '{doc_id}' ({skipped} skipped)")
-        else:
-            print(f"  Added {len(valid_chunks)} chunks from '{doc_id}'")
-        return len(valid_chunks)
+        for batch_start in range(0, total_items, BATCH_SIZE):
+            batch_end = min(batch_start + BATCH_SIZE, total_items)
+            self.collection.add(
+                ids=ids[batch_start:batch_end],
+                embeddings=valid_embeddings[batch_start:batch_end],
+                documents=valid_chunks[batch_start:batch_end],
+                metadatas=metadatas[batch_start:batch_end]
+            )
+            if total_items > BATCH_SIZE and show_progress:
+                print(f"    Stored batch {batch_start//BATCH_SIZE + 1}/{(total_items + BATCH_SIZE - 1)//BATCH_SIZE}")
+
+        elapsed = time.time() - start_time
+        return len(valid_chunks), elapsed
 
     def search(self, query: str, n_results: int = 5) -> list[dict]:
         """
@@ -189,9 +211,17 @@ class DocumentVectorStore:
         """
         existing = self.collection.get(where={"source": doc_id})
         if existing["ids"]:
-            self.collection.delete(ids=existing["ids"])
-            print(f"Removed '{doc_id}' ({len(existing['ids'])} chunks)")
-            return len(existing["ids"])
+            # Batch deletions to avoid ChromaDB limits
+            BATCH_SIZE = 5000
+            ids_to_delete = existing["ids"]
+            total_ids = len(ids_to_delete)
+
+            for batch_start in range(0, total_ids, BATCH_SIZE):
+                batch_end = min(batch_start + BATCH_SIZE, total_ids)
+                self.collection.delete(ids=ids_to_delete[batch_start:batch_end])
+
+            print(f"Removed '{doc_id}' ({total_ids} chunks)")
+            return total_ids
         else:
             print(f"'{doc_id}' not found in index")
             return 0

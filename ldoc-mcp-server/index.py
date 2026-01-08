@@ -17,6 +17,7 @@ Usage:
 import glob
 import os
 import sys
+import time
 from pathlib import Path
 
 from document_extractor import extract_text, is_supported, get_supported_extensions, get_file_type
@@ -24,12 +25,21 @@ from chunker import chunk_by_paragraphs
 from vector_store import DocumentVectorStore, check_ollama_connection, check_model_available
 
 
+def format_time(seconds: float) -> str:
+    """Format seconds into human-readable time."""
+    if seconds < 60:
+        return f"{seconds:.1f}s"
+    minutes = int(seconds // 60)
+    secs = seconds % 60
+    return f"{minutes}m {secs:.1f}s"
+
+
 def index_file(
     file_path: str,
     store: DocumentVectorStore,
     chunk_size: int = 500,
     force: bool = False
-) -> tuple[bool, str]:
+) -> tuple[bool, str, float]:
     """
     Index a single file to the vector store.
 
@@ -40,13 +50,13 @@ def index_file(
         force: Re-index if already exists
 
     Returns:
-        Tuple of (success, status_message)
+        Tuple of (success, status_message, time_taken)
     """
     if not os.path.isfile(file_path):
-        return False, f"File not found: {file_path}"
+        return False, f"File not found: {file_path}", 0.0
 
     if not is_supported(file_path):
-        return False, f"Unsupported format: {Path(file_path).suffix}"
+        return False, f"Unsupported format: {Path(file_path).suffix}", 0.0
 
     doc_id = os.path.basename(file_path)
     file_type = get_file_type(file_path)
@@ -58,13 +68,15 @@ def index_file(
             store.remove_document(doc_id)
         else:
             chunks = store.get_document_chunks(doc_id)
-            return False, f"Already indexed ({len(chunks)} chunks). Use --force to re-index."
+            return False, f"Already indexed ({len(chunks)} chunks). Use --force to re-index.", 0.0
 
     try:
+        start_time = time.time()
+
         # Extract text
         text = extract_text(file_path)
         if not text.strip():
-            return False, "No text extracted"
+            return False, "No text extracted", 0.0
 
         # Chunk text
         chunks = chunk_by_paragraphs(text, max_chunk_size=chunk_size)
@@ -74,11 +86,12 @@ def index_file(
             "file_path": os.path.abspath(file_path),
             "file_type": file_type
         }
-        num_added = store.add_document(doc_id, chunks, metadata)
-        return True, f"Indexed {num_added} chunks"
+        num_added, embed_time = store.add_document(doc_id, chunks, metadata)
+        total_time = time.time() - start_time
+        return True, f"Indexed {num_added} chunks in {format_time(total_time)}", total_time
 
     except Exception as e:
-        return False, f"Error: {e}"
+        return False, f"Error: {e}", 0.0
 
 
 def find_documents(path: str, extensions: list[str] | None = None) -> list[str]:
@@ -187,18 +200,20 @@ def index(
     print(f"Found {len(unique_files)} document(s) to process")
     print("-" * 50)
 
-    stats = {"indexed": 0, "skipped": 0, "failed": 0, "total_chunks": 0}
+    stats = {"indexed": 0, "skipped": 0, "failed": 0, "total_chunks": 0, "total_time": 0.0}
+    overall_start = time.time()
 
     for i, file_path in enumerate(unique_files, 1):
         doc_name = os.path.basename(file_path)
         file_type = get_file_type(file_path)
         print(f"\n[{i}/{len(unique_files)}] {doc_name} ({file_type})")
 
-        success, message = index_file(file_path, store, chunk_size, force)
+        success, message, elapsed = index_file(file_path, store, chunk_size, force)
 
         if success:
             print(f"  ✓ {message}")
             stats["indexed"] += 1
+            stats["total_time"] += elapsed
             # Extract chunk count from message
             try:
                 num_chunks = int(message.split()[1])
@@ -212,12 +227,15 @@ def index(
             print(f"  ✗ {message}")
             stats["failed"] += 1
 
+    overall_time = time.time() - overall_start
+
     # Summary
     print("\n" + "=" * 50)
     print("Indexing Complete!")
     print(f"  Indexed: {stats['indexed']} documents ({stats['total_chunks']} chunks)")
     print(f"  Skipped: {stats['skipped']} documents")
     print(f"  Failed:  {stats['failed']} documents")
+    print(f"  Time:    {format_time(overall_time)}")
     print(f"  Database: {persist_dir}")
 
     return stats
