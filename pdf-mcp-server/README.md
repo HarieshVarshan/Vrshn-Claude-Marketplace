@@ -34,6 +34,39 @@ ollama pull nomic-embed-text
 ollama list
 ```
 
+**Important:** Ollama must be running for both indexing and searching (it converts text to embeddings).
+
+**Start Ollama:**
+```bash
+# Option 1: Run manually (foreground) - Ctrl+C to stop
+ollama serve
+
+# Option 2: Run as background process
+nohup ollama serve > /dev/null 2>&1 &
+
+# Option 3: Run as systemd service (recommended for always-on)
+sudo systemctl enable ollama
+sudo systemctl start ollama
+```
+
+**Stop Ollama:**
+```bash
+# For Option 1: Press Ctrl+C in the terminal
+
+# For Option 2: Kill background process
+pkill ollama
+# or find and kill specific PID
+pgrep ollama && kill $(pgrep ollama)
+
+# For Option 3: Stop systemd service
+sudo systemctl stop ollama
+# To disable auto-start on boot
+sudo systemctl disable ollama
+
+# Verify no ollama processes remain
+pgrep -a ollama
+```
+
 ### 2. Create Virtual Environment
 
 ```bash
@@ -49,22 +82,17 @@ pip install -r requirements.txt
 
 ```bash
 # Index all supported documents in a folder
-python index_documents.py /path/to/docs
+python index.py ./docs
+
+# Index specific files
+python index.py report.pdf data.xlsx presentation.pptx
 
 # Index specific file types only
-python index_documents.py /path/to/docs --ext pdf docx xlsx
-
-# Add individual files
-python add_document.py report.pdf data.xlsx presentation.pptx
+python index.py ./docs --ext pdf docx xlsx
 
 # Force re-index
-python add_document.py --force updated_doc.pdf
-```
-
-**Legacy scripts still available:**
-```bash
-python index_pdfs.py ./pdfs      # PDF only
-python add_pdf.py doc.pdf        # PDF only
+python index.py --force updated_doc.pdf
+python index.py --force ./docs
 ```
 
 ### 4. Configure Claude Code
@@ -98,17 +126,12 @@ claude
 ### CLI Tools
 
 ```bash
-# Index all documents in a directory
-python index_documents.py ./docs
-
-# Index only specific formats
-python index_documents.py ./docs --ext pdf docx xlsx
-
-# Add specific documents (skips duplicates)
-python add_document.py report.docx data.xlsx notes.md
-
-# Force re-index
-python add_document.py --force updated_doc.pdf
+# Index files or directories (unified interface)
+python index.py ./docs                        # Index all documents in folder
+python index.py file1.pdf file2.docx          # Index specific files
+python index.py ./docs --ext pdf docx         # Index only specific formats
+python index.py --force updated_doc.pdf       # Force re-index a file
+python index.py --force ./docs                # Force re-index entire folder
 
 # Manage index
 python manage_index.py list              # List all documents
@@ -143,7 +166,7 @@ Once configured, ask Claude:
 
 New/updated documents are searchable immediately after indexing:
 ```bash
-python add_document.py new_report.docx
+python index.py new_report.docx
 # Immediately searchable - no restart needed
 ```
 
@@ -175,11 +198,11 @@ du -sh chroma_db/
 python manage_index.py remove old_doc.pdf
 
 # Re-index updated files
-python add_document.py --force updated_doc.docx
+python index.py --force updated_doc.docx
 
 # Clear and rebuild entire index (if needed)
 python manage_index.py clear
-python index_documents.py ./docs
+python index.py ./docs
 ```
 
 For typical use (hundreds to a few thousand documents), you won't hit any issues.
@@ -203,15 +226,11 @@ For typical use (hundreds to a few thousand documents), you won't hit any issues
 
 ```
 pdf-mcp-server/
-├── document_extractor.py # Multi-format text extraction (NEW)
-├── pdf_extractor.py      # PDF text extraction (legacy)
+├── index.py              # Unified indexing (files, folders, updates)
+├── document_extractor.py # Multi-format text extraction
 ├── chunker.py            # Text chunking
 ├── vector_store.py       # ChromaDB + Ollama embeddings
-├── index_documents.py    # Bulk indexing - all formats (NEW)
-├── index_pdfs.py         # Bulk indexing - PDF only (legacy)
-├── add_document.py       # Incremental indexing - all formats (NEW)
-├── add_pdf.py            # Incremental indexing - PDF only (legacy)
-├── manage_index.py       # Index management
+├── manage_index.py       # Index management (list, search, remove)
 ├── mcp_pdf_server.py     # MCP server
 ├── requirements.txt
 ├── chroma_db/            # Vector database (auto-created)
