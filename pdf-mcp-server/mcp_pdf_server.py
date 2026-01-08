@@ -1,7 +1,8 @@
 #!/usr/bin/env python3
 """
-MCP Server for PDF Search
-Exposes PDF vector search capabilities to Claude CLI via MCP protocol.
+MCP Server for Document Search
+Exposes document vector search capabilities to Claude CLI via MCP protocol.
+Supports: PDF, DOCX, XLSX, PPTX, ODT, ODS, ODP, TXT, MD, HTML, CSV, JSON, XML
 """
 
 import asyncio
@@ -46,7 +47,7 @@ async def list_tools():
     return [
         Tool(
             name="search_pdfs",
-            description="Search through indexed PDF documents using semantic search. Returns relevant text chunks with source documents and relevance scores.",
+            description="Search through indexed documents using semantic search. Supports PDF, DOCX, XLSX, PPTX, ODT, TXT, MD, HTML, CSV, and more. Returns relevant text chunks with source documents and relevance scores.",
             inputSchema={
                 "type": "object",
                 "properties": {
@@ -67,7 +68,7 @@ async def list_tools():
         ),
         Tool(
             name="list_indexed_documents",
-            description="List all PDF documents that have been indexed and are searchable.",
+            description="List all documents that have been indexed and are searchable (PDF, DOCX, XLSX, PPTX, ODT, TXT, MD, HTML, CSV, etc.).",
             inputSchema={
                 "type": "object",
                 "properties": {}
@@ -75,7 +76,7 @@ async def list_tools():
         ),
         Tool(
             name="get_index_stats",
-            description="Get statistics about the PDF index including document count, chunk count, and model info.",
+            description="Get statistics about the document index including document count, chunk count, and model info.",
             inputSchema={
                 "type": "object",
                 "properties": {}
@@ -102,7 +103,7 @@ async def call_tool(name: str, arguments: dict):
             if not results:
                 return [TextContent(
                     type="text",
-                    text=f"No results found for: '{query}'\n\nTip: Make sure PDFs have been indexed using the indexing scripts."
+                    text=f"No results found for: '{query}'\n\nTip: Make sure documents have been indexed using: python index_documents.py <folder>"
                 )]
 
             # Format results
@@ -128,7 +129,7 @@ async def call_tool(name: str, arguments: dict):
             if not docs:
                 return [TextContent(
                     type="text",
-                    text="No documents indexed.\n\nUse `python index_pdfs.py <pdf_folder>` to index PDFs."
+                    text="No documents indexed.\n\nUse `python index_documents.py <folder>` to index documents.\nSupported: PDF, DOCX, XLSX, PPTX, ODT, TXT, MD, HTML, CSV"
                 )]
 
             output = "## Indexed Documents\n\n"
