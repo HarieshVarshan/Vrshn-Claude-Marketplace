@@ -8,12 +8,12 @@ import os
 import sys
 import argparse
 
-from vector_store import PDFVectorStore
+from vector_store import DocumentVectorStore
 
 
 def list_documents(persist_dir: str = "./chroma_db"):
     """List all indexed documents."""
-    store = PDFVectorStore(persist_dir)
+    store = DocumentVectorStore(persist_dir)
     docs = store.list_documents()
 
     if not docs:
@@ -34,7 +34,7 @@ def list_documents(persist_dir: str = "./chroma_db"):
 
 def remove_document(doc_name: str, persist_dir: str = "./chroma_db"):
     """Remove a document from the index."""
-    store = PDFVectorStore(persist_dir)
+    store = DocumentVectorStore(persist_dir)
 
     if not store.is_document_indexed(doc_name):
         print(f"'{doc_name}' not found in index")
@@ -46,7 +46,7 @@ def remove_document(doc_name: str, persist_dir: str = "./chroma_db"):
 
 def search_index(query: str, persist_dir: str = "./chroma_db", n_results: int = 5):
     """Search the index."""
-    store = PDFVectorStore(persist_dir)
+    store = DocumentVectorStore(persist_dir)
 
     results = store.search(query, n_results)
 
@@ -71,7 +71,7 @@ def search_index(query: str, persist_dir: str = "./chroma_db", n_results: int = 
 
 def show_stats(persist_dir: str = "./chroma_db"):
     """Show index statistics."""
-    store = PDFVectorStore(persist_dir)
+    store = DocumentVectorStore(persist_dir)
     stats = store.get_stats()
 
     print("Index Statistics")
@@ -90,7 +90,7 @@ def clear_index(persist_dir: str = "./chroma_db", confirm: bool = False):
             print("Aborted.")
             return
 
-    store = PDFVectorStore(persist_dir)
+    store = DocumentVectorStore(persist_dir)
     docs = store.list_documents()
 
     for doc_name in docs:
@@ -101,7 +101,7 @@ def clear_index(persist_dir: str = "./chroma_db", confirm: bool = False):
 
 def main():
     parser = argparse.ArgumentParser(
-        description="Manage the PDF vector index"
+        description="Manage the document vector index"
     )
     parser.add_argument(
         "--db", "-d",

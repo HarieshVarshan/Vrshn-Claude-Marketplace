@@ -70,7 +70,7 @@ pgrep -a ollama
 ### 2. Create Virtual Environment
 
 ```bash
-cd /home/harieshvarshan/ti/SWATI/vrshn-marketplace/pdf-mcp-server
+cd /home/harieshvarshan/ti/SWATI/vrshn-marketplace/ldoc-mcp-server
 
 python -m venv venv
 source venv/bin/activate
@@ -98,11 +98,11 @@ python index.py --force ./docs
 ### 4. Configure Claude Code
 
 ```bash
-claude mcp add --transport stdio --scope user pdf-search \
-  --env CHROMA_DB_PATH=/home/harieshvarshan/ti/SWATI/vrshn-marketplace/pdf-mcp-server/chroma_db \
-  --env PYTHONPATH=/home/harieshvarshan/ti/SWATI/vrshn-marketplace/pdf-mcp-server \
-  -- /home/harieshvarshan/ti/SWATI/vrshn-marketplace/pdf-mcp-server/venv/bin/python \
-  /home/harieshvarshan/ti/SWATI/vrshn-marketplace/pdf-mcp-server/mcp_pdf_server.py
+claude mcp add --transport stdio --scope user ldoc-search \
+  --env CHROMA_DB_PATH=/home/harieshvarshan/ti/SWATI/vrshn-marketplace/ldoc-mcp-server/chroma_db \
+  --env PYTHONPATH=/home/harieshvarshan/ti/SWATI/vrshn-marketplace/ldoc-mcp-server \
+  -- /home/harieshvarshan/ti/SWATI/vrshn-marketplace/ldoc-mcp-server/venv/bin/python \
+  /home/harieshvarshan/ti/SWATI/vrshn-marketplace/ldoc-mcp-server/mcp_server.py
 ```
 
 ### 5. Verify & Restart Claude Code
@@ -225,13 +225,13 @@ For typical use (hundreds to a few thousand documents), you won't hit any issues
 ## Project Structure
 
 ```
-pdf-mcp-server/
+ldoc-mcp-server/
 ├── index.py              # Unified indexing (files, folders, updates)
 ├── document_extractor.py # Multi-format text extraction
 ├── chunker.py            # Text chunking
 ├── vector_store.py       # ChromaDB + Ollama embeddings
 ├── manage_index.py       # Index management (list, search, remove)
-├── mcp_pdf_server.py     # MCP server
+├── mcp_server.py         # MCP server
 ├── requirements.txt
 ├── chroma_db/            # Vector database (auto-created)
 └── docs/                 # Put documents here
@@ -261,7 +261,7 @@ To add support for a new file format:
 
 
 ## TODOs
-1. since we support multiple file formats instead of pdf-mcp-server can be rename it as ldoc-mcp-server and also update claude mcp as ldoc-mcp so that nothing breaks.
+1. ~~since we support multiple file formats instead of pdf-mcp-server can be rename it as ldoc-mcp-server and also update claude mcp as ldoc-mcp so that nothing breaks.~~ ✅ Done
 2. add progress bar and time taken while embedding files. (for each files and also overall)
 3. how to use this standalone without claude?
 4. how to make this the chromadb and mcp-server available to my entire team, I dont want them to know about how to add embeddings, i just want them to use with whatever I have trained and stored in db at any point in time?

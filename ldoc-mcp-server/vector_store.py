@@ -9,7 +9,7 @@ from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
 
-class PDFVectorStore:
+class DocumentVectorStore:
     """Vector store using ChromaDB with Ollama embeddings."""
 
     def __init__(
@@ -33,7 +33,7 @@ class PDFVectorStore:
         # Initialize ChromaDB
         self.client = chromadb.PersistentClient(path=persist_dir)
         self.collection = self.client.get_or_create_collection(
-            name="pdf_documents",
+            name="documents",
             metadata={"hnsw:space": "cosine"}
         )
 
@@ -231,6 +231,10 @@ def check_ollama_connection(url: str = "http://localhost:11434") -> bool:
         return False
 
 
+# Backward compatibility alias
+PDFVectorStore = DocumentVectorStore
+
+
 def check_model_available(model: str, url: str = "http://localhost:11434") -> bool:
     """Check if a specific model is available in Ollama."""
     try:
@@ -260,7 +264,7 @@ if __name__ == "__main__":
     print("Ollama is ready!")
 
     # Test embedding
-    store = PDFVectorStore("./test_chroma_db")
+    store = DocumentVectorStore("./test_chroma_db")
 
     test_chunks = [
         "This is a test document about machine learning.",

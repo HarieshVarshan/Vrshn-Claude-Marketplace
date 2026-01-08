@@ -17,24 +17,24 @@ from mcp.types import Tool, TextContent
 # Add parent directory to path for imports
 sys.path.insert(0, str(Path(__file__).parent))
 
-from vector_store import PDFVectorStore, check_ollama_connection
+from vector_store import DocumentVectorStore, check_ollama_connection
 
 # Configuration from environment variables
 CHROMA_DB_PATH = os.environ.get("CHROMA_DB_PATH", "./chroma_db")
 OLLAMA_MODEL = os.environ.get("OLLAMA_MODEL", "nomic-embed-text")
 
 # Initialize server
-server = Server("pdf-search")
+server = Server("ldoc-search")
 
 # Initialize vector store (lazy loading)
 _store = None
 
 
-def get_store() -> PDFVectorStore:
+def get_store() -> DocumentVectorStore:
     """Get or create the vector store instance."""
     global _store
     if _store is None:
-        _store = PDFVectorStore(
+        _store = DocumentVectorStore(
             persist_dir=CHROMA_DB_PATH,
             model=OLLAMA_MODEL
         )
@@ -103,7 +103,7 @@ async def call_tool(name: str, arguments: dict):
             if not results:
                 return [TextContent(
                     type="text",
-                    text=f"No results found for: '{query}'\n\nTip: Make sure documents have been indexed using: python index_documents.py <folder>"
+                    text=f"No results found for: '{query}'\n\nTip: Make sure documents have been indexed using: python index.py <folder>"
                 )]
 
             # Format results
@@ -129,7 +129,7 @@ async def call_tool(name: str, arguments: dict):
             if not docs:
                 return [TextContent(
                     type="text",
-                    text="No documents indexed.\n\nUse `python index_documents.py <folder>` to index documents.\nSupported: PDF, DOCX, XLSX, PPTX, ODT, TXT, MD, HTML, CSV"
+                    text="No documents indexed.\n\nUse `python index.py <folder>` to index documents.\nSupported: PDF, DOCX, XLSX, PPTX, ODT, TXT, MD, HTML, CSV"
                 )]
 
             output = "## Indexed Documents\n\n"

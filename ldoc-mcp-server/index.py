@@ -21,12 +21,12 @@ from pathlib import Path
 
 from document_extractor import extract_text, is_supported, get_supported_extensions, get_file_type
 from chunker import chunk_by_paragraphs
-from vector_store import PDFVectorStore, check_ollama_connection, check_model_available
+from vector_store import DocumentVectorStore, check_ollama_connection, check_model_available
 
 
 def index_file(
     file_path: str,
-    store: PDFVectorStore,
+    store: DocumentVectorStore,
     chunk_size: int = 500,
     force: bool = False
 ) -> tuple[bool, str]:
@@ -156,7 +156,7 @@ def index(
         print("Pull it with: ollama pull nomic-embed-text")
         sys.exit(1)
 
-    store = PDFVectorStore(persist_dir)
+    store = DocumentVectorStore(persist_dir)
 
     # Collect all files to index
     all_files = []
