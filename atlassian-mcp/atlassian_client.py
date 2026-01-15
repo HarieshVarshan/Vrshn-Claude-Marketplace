@@ -53,6 +53,22 @@ class AtlassianConfig:
             }
         return None
 
+    def should_bypass_proxy(self, url: str) -> bool:
+        """Check if URL should bypass proxy based on NO_PROXY."""
+        from urllib.parse import urlparse
+        if not self.no_proxy:
+            return False
+        hostname = urlparse(url).hostname or ''
+        no_proxy_list = [x.strip() for x in self.no_proxy.split(',')]
+        for no_proxy in no_proxy_list:
+            if no_proxy.startswith('.'):
+                # Domain suffix match (e.g., .ti.com)
+                if hostname.endswith(no_proxy) or hostname == no_proxy[1:]:
+                    return True
+            elif hostname == no_proxy or hostname.endswith('.' + no_proxy):
+                return True
+        return False
+
 
 class JiraClient:
     """Client for Jira REST API v2."""
@@ -67,9 +83,11 @@ class JiraClient:
             'Accept': 'application/json'
         })
         self.session.verify = config.verify_ssl
-        proxies = config.get_proxies()
-        if proxies:
-            self.session.proxies.update(proxies)
+        # Only set proxies if URL should not bypass proxy
+        if not config.should_bypass_proxy(self.base_url):
+            proxies = config.get_proxies()
+            if proxies:
+                self.session.proxies.update(proxies)
 
     def _parse_issue_key(self, issue_key_or_url: str) -> str:
         """Extract issue key from URL or return as-is."""
@@ -186,9 +204,11 @@ class ConfluenceClient:
             'Accept': 'application/json'
         })
         self.session.verify = config.verify_ssl
-        proxies = config.get_proxies()
-        if proxies:
-            self.session.proxies.update(proxies)
+        # Only set proxies if URL should not bypass proxy
+        if not config.should_bypass_proxy(self.base_url):
+            proxies = config.get_proxies()
+            if proxies:
+                self.session.proxies.update(proxies)
 
     def _parse_page_id(self, page_id_or_url: str) -> str:
         """Extract page ID from URL or return as-is."""
@@ -289,9 +309,11 @@ class BitbucketClient:
             'Accept': 'application/json'
         })
         self.session.verify = config.verify_ssl
-        proxies = config.get_proxies()
-        if proxies:
-            self.session.proxies.update(proxies)
+        # Only set proxies if URL should not bypass proxy
+        if not config.should_bypass_proxy(self.base_url):
+            proxies = config.get_proxies()
+            if proxies:
+                self.session.proxies.update(proxies)
 
     def _parse_pr_url(self, url_or_parts: str) -> tuple:
         """Parse PR URL to extract project, repo, and PR ID."""
