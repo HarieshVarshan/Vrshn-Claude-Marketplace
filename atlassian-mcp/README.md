@@ -32,22 +32,30 @@ A Model Context Protocol (MCP) server that provides Claude with access to Jira, 
 
 ## Installation
 
-### 1. Create Virtual Environment
+### 1. Set Up Python Virtual Environment
+
+The plugin requires a Python virtual environment with dependencies installed at a **fixed location** (`~/.local/share/atlassian-mcp/`). This follows the [XDG Base Directory Specification](https://specifications.freedesktop.org/basedir-spec/basedir-spec-latest.html) for user application data.
 
 ```bash
-cd atlassian-mcp
+# Create the directory and virtual environment
+mkdir -p ~/.local/share/atlassian-mcp
+cd ~/.local/share/atlassian-mcp
 python -m venv venv
-source venv/bin/activate  # Linux/Mac
-# or: venv\Scripts\activate  # Windows
+
+# Activate and install dependencies
+source venv/bin/activate
+pip install mcp requests python-dotenv
 ```
 
-### 2. Install Dependencies
+#### Dependencies
 
-```bash
-pip install -r requirements.txt
-```
+| Package | Purpose |
+|---------|---------|
+| `mcp` | Model Context Protocol SDK for building MCP servers |
+| `requests` | HTTP client for Atlassian REST API calls |
+| `python-dotenv` | Load credentials from `.env` configuration file |
 
-### 3. Configure Credentials
+### 2. Configure Credentials
 
 Create `~/.config/atlassian/.env`:
 
@@ -75,7 +83,7 @@ EOF
 chmod 600 ~/.config/atlassian/.env
 ```
 
-### 4. Create Personal Access Tokens
+### 3. Create Personal Access Tokens
 
 #### Jira
 1. Go to **Avatar > Profile > Personal Access Tokens**
@@ -95,27 +103,27 @@ chmod 600 ~/.config/atlassian/.env
 
 ## Claude Integration
 
-### Option 1: Direct MCP Registration
+### Option 1: Plugin Marketplace (Recommended)
+
+If you have the marketplace configured:
 
 ```bash
-claude mcp add --transport stdio --scope user atlassian \
-  --env ATLASSIAN_CONFIG=~/.config/atlassian/.env \
-  -- python /path/to/atlassian-mcp/mcp_server.py
-```
-
-### Option 2: Using Virtual Environment
-
-```bash
-claude mcp add --transport stdio --scope user atlassian \
-  --env ATLASSIAN_CONFIG=~/.config/atlassian/.env \
-  -- /path/to/atlassian-mcp/venv/bin/python /path/to/atlassian-mcp/mcp_server.py
-```
-
-### Option 3: Plugin Marketplace (if using ti-claude-code-marketplace)
-
-If you have the marketplace configured, install via:
-```bash
+# Install the plugin
 claude plugin install atlassian-mcp
+
+# Restart Claude Code to load the MCP server
+```
+
+The plugin will automatically use the virtual environment at `~/.local/share/atlassian-mcp/venv/`.
+
+### Option 2: Manual MCP Registration
+
+If not using the marketplace, register the MCP server manually:
+
+```bash
+claude mcp add --transport stdio --scope user atlassian \
+  --env ATLASSIAN_CONFIG=~/.config/atlassian/.env \
+  -- ~/.local/share/atlassian-mcp/venv/bin/python /path/to/atlassian-mcp/mcp_server.py
 ```
 
 ## Usage Examples
