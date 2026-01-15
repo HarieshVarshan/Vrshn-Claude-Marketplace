@@ -1,0 +1,10 @@
+{
+    "name": "atlassian-mcp",
+    "description": "MCP server for Jira, Confluence, and Bitbucket integration - enables searching, reading, and managing issues, pages, and pull requests",
+    "version": "1.0.0",
+    "author": {
+        "name": "Harieshvarshan",
+        "email": "harieshvarshan@example.com"
+    },
+    "mcpServers": "./mcp-servers.json"
+}

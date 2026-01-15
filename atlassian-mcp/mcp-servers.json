@@ -1,0 +1,12 @@
+{
+    "mcpServers": {
+        "atlassian": {
+            "type": "stdio",
+            "command": "python",
+            "args": ["${CLAUDE_PLUGIN_ROOT}/mcp_server.py"],
+            "env": {
+                "ATLASSIAN_CONFIG": "${HOME}/.config/atlassian/.env"
+            }
+        }
+    }
+}

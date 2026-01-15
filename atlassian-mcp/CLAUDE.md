@@ -1,0 +1,101 @@
+# Atlassian MCP Server - Quick Reference
+
+## Overview
+
+This MCP server provides tools for interacting with Jira, Confluence, and Bitbucket from Claude conversations.
+
+## Available Tools
+
+### Jira
+| Tool | Description |
+|------|-------------|
+| `jira_get_issue` | Get issue by key (PROJ-123) or URL |
+| `jira_search` | Search with JQL (e.g., `project = PROJ AND status = Open`) |
+| `jira_create_issue` | Create new issue |
+| `jira_add_comment` | Add comment to issue |
+| `jira_transition_issue` | Change issue status |
+
+### Confluence
+| Tool | Description |
+|------|-------------|
+| `confluence_get_page` | Get page by ID or URL |
+| `confluence_get_page_by_title` | Get page by space + title |
+| `confluence_search` | Search with text or CQL |
+| `confluence_get_space_pages` | List pages in space |
+
+### Bitbucket
+| Tool | Description |
+|------|-------------|
+| `bitbucket_get_pr` | Get PR details |
+| `bitbucket_get_pr_diff` | Get PR code changes |
+| `bitbucket_list_prs` | List repository PRs |
+| `bitbucket_add_pr_comment` | Comment on PR |
+| `bitbucket_get_file` | Get file from repo |
+| `bitbucket_list_branches` | List branches |
+
+## URL Parsing
+
+The tools automatically parse URLs:
+
+- **Jira**: `https://jira.example.com/browse/PROJ-123` -> extracts `PROJ-123`
+- **Confluence**: `https://confluence.example.com/pages/viewpage.action?pageId=123456` -> extracts `123456`
+- **Bitbucket**: `https://bitbucket.example.com/projects/PROJ/repos/my-repo/pull-requests/42` -> extracts project, repo, PR ID
+
+## JQL Quick Reference
+
+```jql
+# Find issues
+project = PROJ
+assignee = currentUser()
+status = "In Progress"
+status in (Open, "In Progress")
+text ~ "search term"
+
+# Combine with AND/OR
+project = PROJ AND status = Open
+assignee = currentUser() OR reporter = currentUser()
+
+# Order results
+project = PROJ ORDER BY created DESC
+```
+
+## CQL Quick Reference (Confluence)
+
+```cql
+# Search text
+text ~ "search term"
+
+# Filter by space
+space = DOCS
+space IN (DOCS, TEAM)
+
+# By title
+title ~ "guide"
+
+# Combined
+text ~ "deployment" AND space = DOCS
+```
+
+## Configuration
+
+Credentials: `~/.config/atlassian/.env`
+
+```bash
+JIRA_URL=https://jira.example.com
+JIRA_USERNAME=username
+JIRA_TOKEN=token
+
+CONFLUENCE_URL=https://confluence.example.com
+CONFLUENCE_USERNAME=username
+CONFLUENCE_TOKEN=token
+
+BITBUCKET_URL=https://bitbucket.example.com
+BITBUCKET_USERNAME=username
+BITBUCKET_TOKEN=token
+```
+
+## Key Files
+
+- `mcp_server.py` - Main entry point, defines MCP tools
+- `atlassian_client.py` - API clients for all three services
+- `requirements.txt` - Python dependencies (mcp, requests, python-dotenv)
