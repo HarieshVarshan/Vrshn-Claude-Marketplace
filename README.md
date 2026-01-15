@@ -20,7 +20,7 @@ Open or create `~/.claude/settings.json` and add the marketplace configuration:
   "marketplaces": [
     {
       "name": "Vrshn Marketplace",
-      "url": "https://bitbucket.itg.ti.com/projects/vrshn/repos/vrshn-claude-marketplace/raw/marketplace.json?at=refs/heads/master"
+      "url": "https://bitbucket.itg.ti.com/projects/vrshn/repos/vrshn-claude-marketplace/raw/.claude-plugin/marketplace.json?at=refs/heads/master"
     }
   ]
 }
