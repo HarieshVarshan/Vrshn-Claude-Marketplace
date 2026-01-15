@@ -1,0 +1,28 @@
+{
+  "name": "Vrshn Claude Marketplace",
+  "description": "A collection of MCP server plugins for Claude Code - includes Atlassian integration and local document search",
+  "version": "1.0.0",
+  "repositoryUrl": "https://bitbucket.itg.ti.com/projects/vrshn/repos/vrshn-claude-marketplace",
+  "plugins": [
+    {
+      "id": "atlassian-mcp",
+      "name": "Atlassian MCP",
+      "description": "MCP server for Jira, Confluence, and Bitbucket integration - search, read, create, and manage issues, pages, and pull requests",
+      "version": "1.0.0",
+      "author": "Harieshvarshan",
+      "path": "atlassian-mcp",
+      "category": "integration",
+      "tags": ["jira", "confluence", "bitbucket", "atlassian", "project-management"]
+    },
+    {
+      "id": "talk2docs",
+      "name": "Talk2Docs",
+      "description": "Local document semantic search - index and search PDF, DOCX, XLSX, PPTX, and more using ChromaDB and Ollama embeddings",
+      "version": "1.0.0",
+      "author": "Harieshvarshan",
+      "path": "talk2docs",
+      "category": "productivity",
+      "tags": ["documents", "search", "pdf", "semantic-search", "rag", "chromadb", "ollama"]
+    }
+  ]
+}

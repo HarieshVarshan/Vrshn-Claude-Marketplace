@@ -1,0 +1,10 @@
+{
+    "name": "talk2docs",
+    "description": "Local document semantic search - index and search PDF, DOCX, XLSX, PPTX, ODT, TXT, MD, HTML, CSV and more using ChromaDB vector database and Ollama embeddings",
+    "version": "1.0.0",
+    "author": {
+        "name": "Harieshvarshan",
+        "email": "harieshvarshan@example.com"
+    },
+    "mcpServers": "./mcp-servers.json"
+}
