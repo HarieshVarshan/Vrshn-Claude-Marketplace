@@ -2,7 +2,7 @@
 
 ## Overview
 
-This MCP server provides tools for interacting with Jira, Confluence, and Bitbucket from Claude conversations.
+This MCP server provides tools for interacting with Jira, Confluence, Bitbucket, and Jenkins from Claude conversations.
 
 ## Available Tools
 
@@ -32,6 +32,17 @@ This MCP server provides tools for interacting with Jira, Confluence, and Bitbuc
 | `bitbucket_add_pr_comment` | Comment on PR |
 | `bitbucket_get_file` | Get file from repo |
 | `bitbucket_list_branches` | List branches |
+
+### Jenkins (Read-Only)
+| Tool | Description |
+|------|-------------|
+| `jenkins_get_job` | Get job details and status |
+| `jenkins_get_build` | Get specific build information |
+| `jenkins_list_jobs` | List all jobs (optionally in a folder) |
+| `jenkins_get_build_log` | Get build console output |
+| `jenkins_get_queue` | Get pending builds queue |
+| `jenkins_get_nodes` | Get build agent status |
+| `jenkins_get_job_config` | Get job configuration (SCM, triggers, parameters, build steps) |
 
 ## URL Parsing
 
@@ -92,10 +103,14 @@ CONFLUENCE_TOKEN=token
 BITBUCKET_URL=https://bitbucket.example.com
 BITBUCKET_USERNAME=username
 BITBUCKET_TOKEN=token
+
+JENKINS_URL=https://jenkins.example.com
+JENKINS_USERNAME=username
+JENKINS_TOKEN=api-token
 ```
 
 ## Key Files
 
 - `mcp_server.py` - Main entry point, defines MCP tools
-- `atlassian_client.py` - API clients for all three services
+- `atlassian_client.py` - API clients for all four services (Jira, Confluence, Bitbucket, Jenkins)
 - `requirements.txt` - Python dependencies (mcp, requests, python-dotenv)

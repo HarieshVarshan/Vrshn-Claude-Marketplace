@@ -36,6 +36,11 @@ class AtlassianConfig:
         self.bitbucket_username = os.environ.get('BITBUCKET_USERNAME', '')
         self.bitbucket_token = os.environ.get('BITBUCKET_TOKEN', '')
 
+        # Jenkins config
+        self.jenkins_url = os.environ.get('JENKINS_URL', '').rstrip('/')
+        self.jenkins_username = os.environ.get('JENKINS_USERNAME', '')
+        self.jenkins_token = os.environ.get('JENKINS_TOKEN', '')
+
         # Proxy config (optional)
         self.http_proxy = os.environ.get('HTTP_PROXY', '')
         self.https_proxy = os.environ.get('HTTPS_PROXY', '')
@@ -407,11 +412,212 @@ class BitbucketClient:
         return response.json()
 
 
+class JenkinsClient:
+    """Client for Jenkins REST API (read-only operations)."""
+
+    def __init__(self, config: AtlassianConfig):
+        self.base_url = config.jenkins_url
+        self.session = requests.Session()
+        # Jenkins uses Basic Auth with username:api-token
+        self.session.auth = (config.jenkins_username, config.jenkins_token)
+        self.session.headers.update({
+            'Content-Type': 'application/json',
+            'Accept': 'application/json'
+        })
+        self.session.verify = config.verify_ssl
+        # Only set proxies if URL should not bypass proxy
+        if not config.should_bypass_proxy(self.base_url):
+            proxies = config.get_proxies()
+            if proxies:
+                self.session.proxies.update(proxies)
+
+    def _get_job_path(self, job_name: str) -> str:
+        """Convert job name with folders to URL path."""
+        # Handle folder paths (e.g., "folder/subfolder/job" -> "job/folder/job/subfolder/job/job")
+        return '/job/'.join(job_name.split('/'))
+
+    def get_job(self, job_name: str) -> Dict[str, Any]:
+        """Get job details by name."""
+        job_path = self._get_job_path(job_name)
+        url = f"{self.base_url}/job/{job_path}/api/json"
+        response = self.session.get(url)
+        response.raise_for_status()
+        return response.json()
+
+    def get_build(self, job_name: str, build_number: int) -> Dict[str, Any]:
+        """Get specific build information."""
+        job_path = self._get_job_path(job_name)
+        url = f"{self.base_url}/job/{job_path}/{build_number}/api/json"
+        response = self.session.get(url)
+        response.raise_for_status()
+        return response.json()
+
+    def get_last_build(self, job_name: str) -> Dict[str, Any]:
+        """Get the last build for a job."""
+        job_path = self._get_job_path(job_name)
+        url = f"{self.base_url}/job/{job_path}/lastBuild/api/json"
+        response = self.session.get(url)
+        response.raise_for_status()
+        return response.json()
+
+    def list_jobs(self, folder: str = None) -> List[Dict[str, Any]]:
+        """List all jobs, optionally within a folder."""
+        if folder:
+            folder_path = self._get_job_path(folder)
+            url = f"{self.base_url}/job/{folder_path}/api/json"
+        else:
+            url = f"{self.base_url}/api/json"
+
+        params = {"tree": "jobs[name,color,url,lastBuild[number,result,timestamp]]"}
+        response = self.session.get(url, params=params)
+        response.raise_for_status()
+        return response.json().get('jobs', [])
+
+    def get_build_log(self, job_name: str, build_number: int) -> str:
+        """Get console output for a build."""
+        job_path = self._get_job_path(job_name)
+        url = f"{self.base_url}/job/{job_path}/{build_number}/consoleText"
+        response = self.session.get(url)
+        response.raise_for_status()
+        return response.text
+
+    def get_queue(self) -> List[Dict[str, Any]]:
+        """Get the build queue."""
+        url = f"{self.base_url}/queue/api/json"
+        response = self.session.get(url)
+        response.raise_for_status()
+        return response.json().get('items', [])
+
+    def get_nodes(self) -> List[Dict[str, Any]]:
+        """Get all build agents/nodes."""
+        url = f"{self.base_url}/computer/api/json"
+        response = self.session.get(url)
+        response.raise_for_status()
+        return response.json().get('computer', [])
+
+    def get_job_config(self, job_name: str) -> str:
+        """Get job XML configuration."""
+        job_path = self._get_job_path(job_name)
+        url = f"{self.base_url}/job/{job_path}/config.xml"
+        response = self.session.get(url)
+        response.raise_for_status()
+        return response.text
+
+    def get_job_config_parsed(self, job_name: str) -> Dict[str, Any]:
+        """Get job configuration as parsed dictionary with key settings."""
+        import xml.etree.ElementTree as ET
+
+        xml_config = self.get_job_config(job_name)
+        root = ET.fromstring(xml_config)
+
+        config: Dict[str, Any] = {
+            'job_type': root.tag,
+            'description': '',
+            'disabled': False,
+            'triggers': [],
+            'scm': None,
+            'builders': [],
+            'publishers': [],
+            'parameters': [],
+            'raw_xml': xml_config
+        }
+
+        # Description
+        desc = root.find('description')
+        if desc is not None and desc.text:
+            config['description'] = desc.text
+
+        # Disabled status
+        disabled = root.find('disabled')
+        if disabled is not None and disabled.text:
+            config['disabled'] = disabled.text.lower() == 'true'
+
+        # Build triggers
+        triggers = root.find('triggers')
+        if triggers is not None:
+            for trigger in triggers:
+                trigger_info: Dict[str, Any] = {'type': trigger.tag}
+                spec = trigger.find('spec')
+                if spec is not None and spec.text:
+                    trigger_info['schedule'] = spec.text
+                config['triggers'].append(trigger_info)
+
+        # SCM configuration
+        scm = root.find('scm')
+        if scm is not None:
+            scm_class = scm.get('class', '')
+            config['scm'] = {'type': scm_class}
+
+            # Git specific
+            if 'git' in scm_class.lower():
+                user_remote = scm.find('.//userRemoteConfigs/hudson.plugins.git.UserRemoteConfig')
+                if user_remote is not None:
+                    url_elem = user_remote.find('url')
+                    if url_elem is not None and url_elem.text:
+                        config['scm']['url'] = url_elem.text
+
+                branches = scm.findall('.//branches/hudson.plugins.git.BranchSpec/name')
+                if branches:
+                    config['scm']['branches'] = [b.text for b in branches if b.text]
+
+        # Build parameters
+        props = root.find('properties')
+        if props is not None:
+            params_def = props.find('.//hudson.model.ParametersDefinitionProperty/parameterDefinitions')
+            if params_def is not None:
+                for param in params_def:
+                    param_info: Dict[str, Any] = {
+                        'type': param.tag.split('.')[-1],
+                        'name': '',
+                        'description': '',
+                        'default': ''
+                    }
+                    name_elem = param.find('name')
+                    if name_elem is not None and name_elem.text:
+                        param_info['name'] = name_elem.text
+                    desc_elem = param.find('description')
+                    if desc_elem is not None and desc_elem.text:
+                        param_info['description'] = desc_elem.text
+                    default = param.find('defaultValue')
+                    if default is not None and default.text:
+                        param_info['default'] = default.text
+                    config['parameters'].append(param_info)
+
+        # Builders (build steps)
+        builders = root.find('builders')
+        if builders is not None:
+            for builder in builders:
+                builder_info: Dict[str, Any] = {'type': builder.tag.split('.')[-1]}
+                # Shell command
+                command = builder.find('command')
+                if command is not None and command.text:
+                    builder_info['command'] = command.text[:500]  # Truncate long commands
+                config['builders'].append(builder_info)
+
+        # Pipeline definition (for pipeline jobs)
+        definition = root.find('definition')
+        if definition is not None:
+            def_class = definition.get('class', '')
+            config['pipeline'] = {'type': def_class}
+            script = definition.find('script')
+            if script is not None and script.text:
+                config['pipeline']['script'] = script.text
+
+        # Publishers (post-build actions)
+        publishers = root.find('publishers')
+        if publishers is not None:
+            for publisher in publishers:
+                config['publishers'].append({'type': publisher.tag.split('.')[-1]})
+
+        return config
+
+
 # Singleton instances
 _config = None
 _jira_client = None
 _confluence_client = None
 _bitbucket_client = None
+_jenkins_client = None
 
 
 def get_config() -> AtlassianConfig:
@@ -444,3 +650,14 @@ def get_bitbucket_client() -> BitbucketClient:
     if _bitbucket_client is None:
         _bitbucket_client = BitbucketClient(get_config())
     return _bitbucket_client
+
+
+def get_jenkins_client() -> JenkinsClient:
+    """Get or create the Jenkins client."""
+    global _jenkins_client
+    if _jenkins_client is None:
+        config = get_config()
+        if not config.jenkins_url:
+            raise ValueError("Jenkins URL not configured. Set JENKINS_URL environment variable.")
+        _jenkins_client = JenkinsClient(config)
+    return _jenkins_client
