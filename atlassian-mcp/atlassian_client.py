@@ -36,8 +36,38 @@ class AtlassianConfig:
         self.bitbucket_username = os.environ.get('BITBUCKET_USERNAME', '')
         self.bitbucket_token = os.environ.get('BITBUCKET_TOKEN', '')
 
-        # Jenkins config
-        self.jenkins_url = os.environ.get('JENKINS_URL', '').rstrip('/')
+        # Jenkins config - supports multiple servers
+        # Format: JENKINS_SERVERS=proc,epsw (comma-separated server names)
+        # Then: JENKINS_PROC_URL, JENKINS_PROC_USERNAME, JENKINS_PROC_TOKEN
+        # Or legacy single server: JENKINS_URL, JENKINS_USERNAME, JENKINS_TOKEN
+        self.jenkins_servers: Dict[str, Dict[str, str]] = {}
+
+        # Check for multi-server config
+        jenkins_server_names = os.environ.get('JENKINS_SERVERS', '')
+        if jenkins_server_names:
+            for server_name in jenkins_server_names.split(','):
+                server_name = server_name.strip().lower()
+                if server_name:
+                    prefix = f'JENKINS_{server_name.upper()}_'
+                    url = os.environ.get(f'{prefix}URL', '').rstrip('/')
+                    if url:
+                        self.jenkins_servers[server_name] = {
+                            'url': url,
+                            'username': os.environ.get(f'{prefix}USERNAME', ''),
+                            'token': os.environ.get(f'{prefix}TOKEN', '')
+                        }
+
+        # Fallback to legacy single server config
+        legacy_url = os.environ.get('JENKINS_URL', '').rstrip('/')
+        if legacy_url and not self.jenkins_servers:
+            self.jenkins_servers['default'] = {
+                'url': legacy_url,
+                'username': os.environ.get('JENKINS_USERNAME', ''),
+                'token': os.environ.get('JENKINS_TOKEN', '')
+            }
+
+        # For backwards compatibility
+        self.jenkins_url = legacy_url
         self.jenkins_username = os.environ.get('JENKINS_USERNAME', '')
         self.jenkins_token = os.environ.get('JENKINS_TOKEN', '')
 
@@ -415,11 +445,32 @@ class BitbucketClient:
 class JenkinsClient:
     """Client for Jenkins REST API (read-only operations)."""
 
-    def __init__(self, config: AtlassianConfig):
-        self.base_url = config.jenkins_url
+    def __init__(self, config: AtlassianConfig, server_name: Optional[str] = None):
+        """
+        Initialize Jenkins client.
+
+        Args:
+            config: AtlassianConfig instance
+            server_name: Name of the Jenkins server (e.g., 'proc', 'epsw').
+                        If None, uses first available or 'default'.
+        """
+        self.server_name = server_name
+
+        # Get server config
+        if server_name and server_name in config.jenkins_servers:
+            server_config = config.jenkins_servers[server_name]
+        elif config.jenkins_servers:
+            # Use first available server if name not specified
+            first_server = next(iter(config.jenkins_servers))
+            server_config = config.jenkins_servers[first_server]
+            self.server_name = first_server
+        else:
+            raise ValueError("No Jenkins servers configured")
+
+        self.base_url = server_config['url']
         self.session = requests.Session()
         # Jenkins uses Basic Auth with username:api-token
-        self.session.auth = (config.jenkins_username, config.jenkins_token)
+        self.session.auth = (server_config['username'], server_config['token'])
         self.session.headers.update({
             'Content-Type': 'application/json',
             'Accept': 'application/json'
@@ -617,7 +668,7 @@ _config = None
 _jira_client = None
 _confluence_client = None
 _bitbucket_client = None
-_jenkins_client = None
+_jenkins_clients: Dict[str, 'JenkinsClient'] = {}  # Multiple Jenkins clients by server name
 
 
 def get_config() -> AtlassianConfig:
@@ -652,12 +703,46 @@ def get_bitbucket_client() -> BitbucketClient:
     return _bitbucket_client
 
 
-def get_jenkins_client() -> JenkinsClient:
-    """Get or create the Jenkins client."""
-    global _jenkins_client
-    if _jenkins_client is None:
-        config = get_config()
-        if not config.jenkins_url:
-            raise ValueError("Jenkins URL not configured. Set JENKINS_URL environment variable.")
-        _jenkins_client = JenkinsClient(config)
-    return _jenkins_client
+def get_jenkins_client(server: Optional[str] = None) -> JenkinsClient:
+    """
+    Get or create a Jenkins client for the specified server.
+
+    Args:
+        server: Name of the Jenkins server (e.g., 'proc', 'epsw').
+                If None, uses first available server.
+
+    Returns:
+        JenkinsClient instance for the specified server.
+    """
+    global _jenkins_clients
+    config = get_config()
+
+    if not config.jenkins_servers:
+        raise ValueError(
+            "No Jenkins servers configured. Set JENKINS_SERVERS and corresponding "
+            "JENKINS_<NAME>_URL/USERNAME/TOKEN environment variables, "
+            "or use legacy JENKINS_URL/USERNAME/TOKEN."
+        )
+
+    # Normalize server name
+    if server:
+        server = server.lower()
+    else:
+        # Use first available server
+        server = next(iter(config.jenkins_servers))
+
+    if server not in config.jenkins_servers:
+        available = ', '.join(config.jenkins_servers.keys())
+        raise ValueError(f"Unknown Jenkins server '{server}'. Available servers: {available}")
+
+    # Create client if not cached
+    if server not in _jenkins_clients:
+        _jenkins_clients[server] = JenkinsClient(config, server)
+
+    return _jenkins_clients[server]
+
+
+def get_available_jenkins_servers() -> List[str]:
+    """Get list of available Jenkins server names."""
+    config = get_config()
+    return list(config.jenkins_servers.keys())

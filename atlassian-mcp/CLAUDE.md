@@ -36,6 +36,7 @@ This MCP server provides tools for interacting with Jira, Confluence, Bitbucket,
 ### Jenkins (Read-Only)
 | Tool | Description |
 |------|-------------|
+| `jenkins_list_servers` | List available configured Jenkins servers |
 | `jenkins_get_job` | Get job details and status |
 | `jenkins_get_build` | Get specific build information |
 | `jenkins_list_jobs` | List all jobs (optionally in a folder) |
@@ -43,6 +44,8 @@ This MCP server provides tools for interacting with Jira, Confluence, Bitbucket,
 | `jenkins_get_queue` | Get pending builds queue |
 | `jenkins_get_nodes` | Get build agent status |
 | `jenkins_get_job_config` | Get job configuration (SCM, triggers, parameters, build steps) |
+
+**Note:** All Jenkins tools accept an optional `server` parameter to specify which Jenkins server to use (e.g., `server: "proc"` or `server: "epsw"`). If not specified, the first configured server is used.
 
 ## URL Parsing
 
@@ -103,10 +106,30 @@ CONFLUENCE_TOKEN=token
 BITBUCKET_URL=https://bitbucket.example.com
 BITBUCKET_USERNAME=username
 BITBUCKET_TOKEN=token
+```
 
+### Jenkins Configuration
+
+**Single server (legacy):**
+```bash
 JENKINS_URL=https://jenkins.example.com
 JENKINS_USERNAME=username
 JENKINS_TOKEN=api-token
+```
+
+**Multiple servers:**
+```bash
+# Comma-separated list of server names
+JENKINS_SERVERS=proc,epsw
+
+# Server-specific credentials (uppercase server name)
+JENKINS_PROC_URL=https://jenkins-proc.example.com
+JENKINS_PROC_USERNAME=username
+JENKINS_PROC_TOKEN=api-token
+
+JENKINS_EPSW_URL=https://jenkins-epsw.example.com
+JENKINS_EPSW_USERNAME=username
+JENKINS_EPSW_TOKEN=api-token
 ```
 
 ## Key Files

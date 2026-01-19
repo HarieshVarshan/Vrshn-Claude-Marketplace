@@ -27,7 +27,8 @@ from atlassian_client import (
     get_jira_client,
     get_confluence_client,
     get_bitbucket_client,
-    get_jenkins_client
+    get_jenkins_client,
+    get_available_jenkins_servers
 )
 
 # Create the MCP server
@@ -781,7 +782,16 @@ async def list_tools() -> list[Tool]:
             }
         ),
 
-        # Jenkins Tools (Read-Only)
+        # Jenkins Tools (Read-Only) - supports multiple servers
+        Tool(
+            name="jenkins_list_servers",
+            description="List available Jenkins servers that are configured.",
+            inputSchema={
+                "type": "object",
+                "properties": {},
+                "required": []
+            }
+        ),
         Tool(
             name="jenkins_get_job",
             description="Get Jenkins job details including status, last build info, and health report.",
@@ -791,6 +801,10 @@ async def list_tools() -> list[Tool]:
                     "job_name": {
                         "type": "string",
                         "description": "Job name (use folder/job for jobs in folders)"
+                    },
+                    "server": {
+                        "type": "string",
+                        "description": "Jenkins server name (e.g., 'proc', 'epsw'). If not specified, uses first available."
                     }
                 },
                 "required": ["job_name"]
@@ -809,6 +823,10 @@ async def list_tools() -> list[Tool]:
                     "build_number": {
                         "type": "integer",
                         "description": "Build number"
+                    },
+                    "server": {
+                        "type": "string",
+                        "description": "Jenkins server name (e.g., 'proc', 'epsw'). If not specified, uses first available."
                     }
                 },
                 "required": ["job_name", "build_number"]
@@ -823,6 +841,10 @@ async def list_tools() -> list[Tool]:
                     "folder": {
                         "type": "string",
                         "description": "Optional folder path to list jobs from"
+                    },
+                    "server": {
+                        "type": "string",
+                        "description": "Jenkins server name (e.g., 'proc', 'epsw'). If not specified, uses first available."
                     }
                 },
                 "required": []
@@ -841,6 +863,10 @@ async def list_tools() -> list[Tool]:
                     "build_number": {
                         "type": "integer",
                         "description": "Build number"
+                    },
+                    "server": {
+                        "type": "string",
+                        "description": "Jenkins server name (e.g., 'proc', 'epsw'). If not specified, uses first available."
                     }
                 },
                 "required": ["job_name", "build_number"]
@@ -851,7 +877,12 @@ async def list_tools() -> list[Tool]:
             description="Get the Jenkins build queue showing pending builds.",
             inputSchema={
                 "type": "object",
-                "properties": {},
+                "properties": {
+                    "server": {
+                        "type": "string",
+                        "description": "Jenkins server name (e.g., 'proc', 'epsw'). If not specified, uses first available."
+                    }
+                },
                 "required": []
             }
         ),
@@ -860,7 +891,12 @@ async def list_tools() -> list[Tool]:
             description="Get status of Jenkins build agents/nodes.",
             inputSchema={
                 "type": "object",
-                "properties": {},
+                "properties": {
+                    "server": {
+                        "type": "string",
+                        "description": "Jenkins server name (e.g., 'proc', 'epsw'). If not specified, uses first available."
+                    }
+                },
                 "required": []
             }
         ),
@@ -877,6 +913,10 @@ async def list_tools() -> list[Tool]:
                     "raw_xml": {
                         "type": "boolean",
                         "description": "If true, return raw XML config instead of parsed summary (default: false)"
+                    },
+                    "server": {
+                        "type": "string",
+                        "description": "Jenkins server name (e.g., 'proc', 'epsw'). If not specified, uses first available."
                     }
                 },
                 "required": ["job_name"]
@@ -1076,23 +1116,39 @@ async def call_tool(name: str, arguments: dict[str, Any]) -> list[TextContent]:
             result = '\n'.join(output)
 
         # Jenkins tools
+        elif name == "jenkins_list_servers":
+            servers = get_available_jenkins_servers()
+            if servers:
+                output = ["# Available Jenkins Servers", ""]
+                for srv in servers:
+                    output.append(f"- **{srv}**")
+                output.append("")
+                output.append("Use the `server` parameter in other Jenkins tools to specify which server to query.")
+                result = '\n'.join(output)
+            else:
+                result = "No Jenkins servers configured."
+
         elif name == "jenkins_get_job":
-            client = get_jenkins_client()
+            server = arguments.get("server")
+            client = get_jenkins_client(server)
             job = client.get_job(arguments["job_name"])
             result = format_jenkins_job(job)
 
         elif name == "jenkins_get_build":
-            client = get_jenkins_client()
+            server = arguments.get("server")
+            client = get_jenkins_client(server)
             build = client.get_build(arguments["job_name"], arguments["build_number"])
             result = format_jenkins_build(build)
 
         elif name == "jenkins_list_jobs":
-            client = get_jenkins_client()
+            server = arguments.get("server")
+            client = get_jenkins_client(server)
             jobs = client.list_jobs(arguments.get("folder"))
             result = format_jenkins_jobs(jobs)
 
         elif name == "jenkins_get_build_log":
-            client = get_jenkins_client()
+            server = arguments.get("server")
+            client = get_jenkins_client(server)
             log = client.get_build_log(arguments["job_name"], arguments["build_number"])
             # Truncate very long logs
             if len(log) > 50000:
@@ -1101,17 +1157,20 @@ async def call_tool(name: str, arguments: dict[str, Any]) -> list[TextContent]:
             result = f"# Build Log: {arguments['job_name']} #{arguments['build_number']}\n\n```\n{log}\n```"
 
         elif name == "jenkins_get_queue":
-            client = get_jenkins_client()
+            server = arguments.get("server")
+            client = get_jenkins_client(server)
             queue = client.get_queue()
             result = format_jenkins_queue(queue)
 
         elif name == "jenkins_get_nodes":
-            client = get_jenkins_client()
+            server = arguments.get("server")
+            client = get_jenkins_client(server)
             nodes = client.get_nodes()
             result = format_jenkins_nodes(nodes)
 
         elif name == "jenkins_get_job_config":
-            client = get_jenkins_client()
+            server = arguments.get("server")
+            client = get_jenkins_client(server)
             if arguments.get("raw_xml"):
                 xml_config = client.get_job_config(arguments["job_name"])
                 result = f"# Job Configuration: {arguments['job_name']}\n\n```xml\n{xml_config}\n```"
