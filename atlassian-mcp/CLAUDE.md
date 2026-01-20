@@ -14,6 +14,7 @@ This MCP server provides tools for interacting with Jira, Confluence, Bitbucket,
 | `jira_create_issue` | Create new issue |
 | `jira_add_comment` | Add comment to issue |
 | `jira_transition_issue` | Change issue status |
+| `jira_update_issue` | Update issue fields (summary, description, assignee, priority, labels) |
 
 ### Confluence
 | Tool | Description |
@@ -22,6 +23,9 @@ This MCP server provides tools for interacting with Jira, Confluence, Bitbucket,
 | `confluence_get_page_by_title` | Get page by space + title |
 | `confluence_search` | Search with text or CQL |
 | `confluence_get_space_pages` | List pages in space |
+| `confluence_create_page` | Create a new page |
+| `confluence_update_page` | Update page content |
+| `confluence_add_comment` | Add comment to a page |
 
 ### Bitbucket
 | Tool | Description |

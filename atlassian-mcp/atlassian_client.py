@@ -328,6 +328,92 @@ class ConfluenceClient:
         response.raise_for_status()
         return response.json()
 
+    def create_page(self, space_key: str, title: str, content: str,
+                    parent_id: str = None) -> Dict[str, Any]:
+        """Create a new Confluence page.
+
+        Args:
+            space_key: Space key where the page will be created
+            title: Page title
+            content: Page content in Confluence storage format (XHTML)
+            parent_id: Optional parent page ID for nesting
+        """
+        url = f"{self.base_url}/rest/api/content"
+        payload: Dict[str, Any] = {
+            'type': 'page',
+            'title': title,
+            'space': {'key': space_key},
+            'body': {
+                'storage': {
+                    'value': content,
+                    'representation': 'storage'
+                }
+            }
+        }
+        if parent_id:
+            payload['ancestors'] = [{'id': parent_id}]
+
+        response = self.session.post(url, json=payload)
+        response.raise_for_status()
+        return response.json()
+
+    def update_page(self, page_id: str, title: str, content: str,
+                    version_number: int = None) -> Dict[str, Any]:
+        """Update an existing Confluence page.
+
+        Args:
+            page_id: Page ID to update
+            title: New page title
+            content: New page content in Confluence storage format (XHTML)
+            version_number: Current version number (if not provided, will be fetched)
+        """
+        # Get current version if not provided
+        if version_number is None:
+            current_page = self.get_page(page_id)
+            version_number = current_page.get('version', {}).get('number', 1)
+
+        url = f"{self.base_url}/rest/api/content/{page_id}"
+        payload = {
+            'type': 'page',
+            'title': title,
+            'body': {
+                'storage': {
+                    'value': content,
+                    'representation': 'storage'
+                }
+            },
+            'version': {
+                'number': version_number + 1
+            }
+        }
+
+        response = self.session.put(url, json=payload)
+        response.raise_for_status()
+        return response.json()
+
+    def add_comment(self, page_id: str, comment: str) -> Dict[str, Any]:
+        """Add a comment to a Confluence page.
+
+        Args:
+            page_id: Page ID to comment on
+            comment: Comment text in Confluence storage format
+        """
+        url = f"{self.base_url}/rest/api/content"
+        payload = {
+            'type': 'comment',
+            'container': {'id': page_id, 'type': 'page'},
+            'body': {
+                'storage': {
+                    'value': comment,
+                    'representation': 'storage'
+                }
+            }
+        }
+
+        response = self.session.post(url, json=payload)
+        response.raise_for_status()
+        return response.json()
+
 
 class BitbucketClient:
     """Client for Bitbucket Server REST API v1.0."""

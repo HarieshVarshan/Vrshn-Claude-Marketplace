@@ -540,6 +540,41 @@ async def list_tools() -> list[Tool]:
                 "required": ["issue_key", "transition"]
             }
         ),
+        Tool(
+            name="jira_update_issue",
+            description="Update a Jira issue's fields (summary, description, assignee, priority, labels).",
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "issue_key": {
+                        "type": "string",
+                        "description": "Issue key or URL"
+                    },
+                    "summary": {
+                        "type": "string",
+                        "description": "New summary/title"
+                    },
+                    "description": {
+                        "type": "string",
+                        "description": "New description"
+                    },
+                    "assignee": {
+                        "type": "string",
+                        "description": "New assignee username"
+                    },
+                    "priority": {
+                        "type": "string",
+                        "description": "New priority (e.g., High, Medium, Low)"
+                    },
+                    "labels": {
+                        "type": "array",
+                        "items": {"type": "string"},
+                        "description": "New labels (replaces existing labels)"
+                    }
+                },
+                "required": ["issue_key"]
+            }
+        ),
 
         # Confluence Tools
         Tool(
@@ -614,6 +649,72 @@ async def list_tools() -> list[Tool]:
                     }
                 },
                 "required": ["space_key"]
+            }
+        ),
+        Tool(
+            name="confluence_create_page",
+            description="Create a new Confluence page. Content should be in Confluence storage format (XHTML).",
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "space_key": {
+                        "type": "string",
+                        "description": "Space key where the page will be created"
+                    },
+                    "title": {
+                        "type": "string",
+                        "description": "Page title"
+                    },
+                    "content": {
+                        "type": "string",
+                        "description": "Page content in Confluence storage format (XHTML). Use <p> for paragraphs, <h1>-<h6> for headings, <ul>/<ol> for lists."
+                    },
+                    "parent_id": {
+                        "type": "string",
+                        "description": "Optional parent page ID to nest this page under"
+                    }
+                },
+                "required": ["space_key", "title", "content"]
+            }
+        ),
+        Tool(
+            name="confluence_update_page",
+            description="Update an existing Confluence page. Content should be in Confluence storage format (XHTML).",
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "page_id": {
+                        "type": "string",
+                        "description": "Page ID to update"
+                    },
+                    "title": {
+                        "type": "string",
+                        "description": "New page title"
+                    },
+                    "content": {
+                        "type": "string",
+                        "description": "New page content in Confluence storage format (XHTML)"
+                    }
+                },
+                "required": ["page_id", "title", "content"]
+            }
+        ),
+        Tool(
+            name="confluence_add_comment",
+            description="Add a comment to a Confluence page.",
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "page_id": {
+                        "type": "string",
+                        "description": "Page ID to comment on"
+                    },
+                    "comment": {
+                        "type": "string",
+                        "description": "Comment text (can use Confluence storage format)"
+                    }
+                },
+                "required": ["page_id", "comment"]
             }
         ),
 
@@ -975,6 +1076,27 @@ async def call_tool(name: str, arguments: dict[str, Any]) -> list[TextContent]:
             client.transition_issue(arguments["issue_key"], arguments["transition"])
             result = f"Issue {arguments['issue_key']} transitioned to '{arguments['transition']}'"
 
+        elif name == "jira_update_issue":
+            client = get_jira_client()
+            fields = {}
+            if arguments.get("summary"):
+                fields["summary"] = arguments["summary"]
+            if arguments.get("description"):
+                fields["description"] = arguments["description"]
+            if arguments.get("assignee"):
+                fields["assignee"] = {"name": arguments["assignee"]}
+            if arguments.get("priority"):
+                fields["priority"] = {"name": arguments["priority"]}
+            if arguments.get("labels") is not None:
+                fields["labels"] = arguments["labels"]
+
+            if not fields:
+                result = "No fields to update. Provide at least one field (summary, description, assignee, priority, labels)."
+            else:
+                client.update_issue(arguments["issue_key"], fields)
+                updated_fields = ", ".join(fields.keys())
+                result = f"Issue {arguments['issue_key']} updated. Fields changed: {updated_fields}"
+
         # Confluence tools
         elif name == "confluence_get_page":
             client = get_confluence_client()
@@ -1017,6 +1139,33 @@ async def call_tool(name: str, arguments: dict[str, Any]) -> list[TextContent]:
                 page_id = page.get('id')
                 output.append(f"- **{title}** (ID: {page_id})")
             result = '\n'.join(output)
+
+        elif name == "confluence_create_page":
+            client = get_confluence_client()
+            created = client.create_page(
+                space_key=arguments["space_key"],
+                title=arguments["title"],
+                content=arguments["content"],
+                parent_id=arguments.get("parent_id")
+            )
+            page_id = created.get('id')
+            page_url = f"{client.base_url}/pages/viewpage.action?pageId={page_id}"
+            result = f"Page created: **{arguments['title']}**\nID: {page_id}\nURL: {page_url}"
+
+        elif name == "confluence_update_page":
+            client = get_confluence_client()
+            updated = client.update_page(
+                page_id=arguments["page_id"],
+                title=arguments["title"],
+                content=arguments["content"]
+            )
+            version = updated.get('version', {}).get('number', 'unknown')
+            result = f"Page updated: **{arguments['title']}**\nID: {arguments['page_id']}\nNew version: {version}"
+
+        elif name == "confluence_add_comment":
+            client = get_confluence_client()
+            client.add_comment(arguments["page_id"], arguments["comment"])
+            result = f"Comment added to page {arguments['page_id']}"
 
         # Bitbucket tools
         elif name == "bitbucket_get_pr":
