@@ -4,7 +4,7 @@ Klocwork API client for project management operations.
 Uses kwadmin CLI tool and Klocwork Web API for administrative operations.
 Requires:
 - kwadmin in PATH (from Klocwork installation)
-- Valid ltoken file (created via kwauth)
+- Credentials configured in ~/.config/atlassian/.env
 """
 
 import os
@@ -14,17 +14,73 @@ import urllib.request
 import urllib.parse
 import urllib.error
 import ssl
-from pathlib import Path
 from typing import Dict, Any, List, Optional
 
 
-# Server configurations
-KLOCWORK_SERVERS = {
-    "dallas": "https://klocwork.itg.ti.com:8090",
-    "india": "https://klocworkweb.india.ti.com:8095"
-}
+# Default server configuration
+DEFAULT_KLOCWORK_URL = "https://klocworkweb.india.ti.com:8095"
+DEFAULT_SERVER = "india"
 
-DEFAULT_SERVER = "dallas"
+
+def get_server_config(server_name: str = None) -> Dict[str, str]:
+    """
+    Get Klocwork server configuration from environment variables.
+
+    Supports multi-server configuration:
+        KLOCWORK_SERVERS=india,stage
+        KLOCWORK_INDIA_URL=https://klocworkweb.india.ti.com:8095
+        KLOCWORK_INDIA_USERNAME=username
+        KLOCWORK_INDIA_TOKEN=token
+
+    Or single server (legacy):
+        KLOCWORK_URL=https://...
+        KLOCWORK_USERNAME=username
+        KLOCWORK_TOKEN=token
+    """
+    server_name = server_name or os.environ.get("KLOCWORK_DEFAULT_SERVER", DEFAULT_SERVER)
+
+    # Check for multi-server configuration
+    server_list = os.environ.get("KLOCWORK_SERVERS", "")
+    if server_list and server_name.lower() in [s.strip().lower() for s in server_list.split(",")]:
+        upper_name = server_name.upper()
+        return {
+            "url": os.environ.get(f"KLOCWORK_{upper_name}_URL", "").rstrip("/"),
+            "username": os.environ.get(f"KLOCWORK_{upper_name}_USERNAME", ""),
+            "token": os.environ.get(f"KLOCWORK_{upper_name}_TOKEN", "")
+        }
+
+    # Fallback to single server configuration
+    return {
+        "url": os.environ.get("KLOCWORK_URL", DEFAULT_KLOCWORK_URL).rstrip("/"),
+        "username": os.environ.get("KLOCWORK_USERNAME", ""),
+        "token": os.environ.get("KLOCWORK_TOKEN", "")
+    }
+
+
+def list_configured_servers() -> List[Dict[str, str]]:
+    """List all configured Klocwork servers."""
+    servers = []
+    server_list = os.environ.get("KLOCWORK_SERVERS", "")
+
+    if server_list:
+        for server_name in server_list.split(","):
+            server_name = server_name.strip()
+            upper_name = server_name.upper()
+            url = os.environ.get(f"KLOCWORK_{upper_name}_URL", "")
+            if url:
+                servers.append({
+                    "name": server_name,
+                    "url": url.rstrip("/"),
+                    "username": os.environ.get(f"KLOCWORK_{upper_name}_USERNAME", "")
+                })
+    elif os.environ.get("KLOCWORK_URL"):
+        servers.append({
+            "name": "default",
+            "url": os.environ.get("KLOCWORK_URL", "").rstrip("/"),
+            "username": os.environ.get("KLOCWORK_USERNAME", "")
+        })
+
+    return servers
 
 
 class KlocworkClient:
@@ -35,62 +91,19 @@ class KlocworkClient:
         Initialize Klocwork client.
 
         Args:
-            server: Server name ('dallas' or 'india') or full URL.
-                   Defaults to dallas if not specified.
+            server: Server name ('india' or 'stage'). Defaults to KLOCWORK_DEFAULT_SERVER.
         """
-        self.server_name = server or DEFAULT_SERVER
+        self.server_name = server or os.environ.get("KLOCWORK_DEFAULT_SERVER", DEFAULT_SERVER)
+        config = get_server_config(self.server_name)
 
-        if self.server_name.startswith("http"):
-            self.base_url = self.server_name.rstrip("/")
-            self.server_name = "custom"
-        else:
-            self.base_url = KLOCWORK_SERVERS.get(
-                self.server_name.lower(),
-                KLOCWORK_SERVERS[DEFAULT_SERVER]
-            )
-
-        self.ltoken = self._get_ltoken()
+        self.base_url = config["url"]
+        self.username = config["username"]
+        self.token = config["token"]
 
         # Create SSL context that doesn't verify certificates (for internal servers)
         self.ssl_context = ssl.create_default_context()
         self.ssl_context.check_hostname = False
         self.ssl_context.verify_mode = ssl.CERT_NONE
-
-    def _get_ltoken(self) -> Optional[str]:
-        """Get the ltoken from the user's home directory."""
-        ltoken_path = Path.home() / ".klocwork" / "ltoken"
-        if ltoken_path.exists():
-            # ltoken file format: host;port;user;token
-            with open(ltoken_path, "r") as f:
-                for line in f:
-                    parts = line.strip().split(";")
-                    if len(parts) >= 4:
-                        # Return the token part
-                        return parts[3]
-        return None
-
-    def _get_ltoken_for_server(self) -> Optional[str]:
-        """Get ltoken specifically for the configured server."""
-        ltoken_path = Path.home() / ".klocwork" / "ltoken"
-        if not ltoken_path.exists():
-            return None
-
-        # Parse server URL to get host and port
-        from urllib.parse import urlparse
-        parsed = urlparse(self.base_url)
-        target_host = parsed.hostname
-        target_port = str(parsed.port) if parsed.port else "8090"
-
-        with open(ltoken_path, "r") as f:
-            for line in f:
-                parts = line.strip().split(";")
-                if len(parts) >= 4:
-                    host, port, user, token = parts[0], parts[1], parts[2], parts[3]
-                    if host == target_host and port == target_port:
-                        return token
-
-        # Fallback to first token if no match
-        return self.ltoken
 
     def _run_kwadmin(self, command: str, args: List[str],
                      capture_output: bool = True) -> Dict[str, Any]:
@@ -159,16 +172,18 @@ class KlocworkClient:
         Returns:
             API response as dictionary
         """
-        token = self._get_ltoken_for_server()
-        if not token:
-            return {"error": "No ltoken found. Run 'kwauth --url <server_url>' to authenticate."}
+        if not self.token:
+            return {"error": "No Klocwork token configured. Set KLOCWORK_TOKEN or KLOCWORK_<SERVER>_TOKEN in ~/.config/atlassian/.env"}
+
+        if not self.username:
+            return {"error": "No Klocwork username configured. Set KLOCWORK_USERNAME or KLOCWORK_<SERVER>_USERNAME in ~/.config/atlassian/.env"}
 
         url = f"{self.base_url}/review/api"
 
         data = {
             "action": action,
-            "user": self._get_username(),
-            "ltoken": token
+            "user": self.username,
+            "ltoken": self.token
         }
         if params:
             data.update(params)
@@ -192,30 +207,6 @@ class KlocworkClient:
             return {"error": f"URL Error: {e.reason}"}
         except Exception as e:
             return {"error": str(e)}
-
-    def _get_username(self) -> Optional[str]:
-        """Get username from ltoken file."""
-        ltoken_path = Path.home() / ".klocwork" / "ltoken"
-        if ltoken_path.exists():
-            from urllib.parse import urlparse
-            parsed = urlparse(self.base_url)
-            target_host = parsed.hostname
-            target_port = str(parsed.port) if parsed.port else "8090"
-
-            with open(ltoken_path, "r") as f:
-                for line in f:
-                    parts = line.strip().split(";")
-                    if len(parts) >= 4:
-                        host, port, user, token = parts[0], parts[1], parts[2], parts[3]
-                        if host == target_host and port == target_port:
-                            return user
-                # Return first user if no match
-                f.seek(0)
-                for line in f:
-                    parts = line.strip().split(";")
-                    if len(parts) >= 3:
-                        return parts[2]
-        return os.environ.get("USER", os.environ.get("USERNAME", "unknown"))
 
     # =========================================================================
     # Project Operations
@@ -604,15 +595,21 @@ class KlocworkClient:
         """Get information about the Klocwork server."""
         return self._run_kwadmin("version", [])
 
+    def get_config(self) -> Dict[str, Any]:
+        """Get current Klocwork configuration."""
+        return {
+            "server": self.server_name,
+            "url": self.base_url,
+            "username": self.username,
+            "token_configured": bool(self.token)
+        }
+
     def list_servers(self) -> Dict[str, Any]:
         """List all configured Klocwork servers."""
+        servers = list_configured_servers()
+        default = os.environ.get("KLOCWORK_DEFAULT_SERVER", DEFAULT_SERVER)
         return {
-            "servers": [
-                {"name": name, "url": url}
-                for name, url in KLOCWORK_SERVERS.items()
-            ],
-            "current_server": {
-                "name": self.server_name,
-                "url": self.base_url
-            }
+            "servers": servers,
+            "default_server": default,
+            "current_server": self.server_name
         }

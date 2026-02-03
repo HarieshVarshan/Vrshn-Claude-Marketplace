@@ -3,41 +3,59 @@
 ## Overview
 
 MCP server for Klocwork project management via kwadmin CLI and Web API.
-Supports multiple servers (Dallas and India).
+Supports multiple Klocwork servers.
 
 ## Prerequisites
 
 - Python 3.11+
 - `uv` package manager
-- Klocwork client tools (kwadmin, kwauth) in PATH
-- Valid Klocwork authentication token
-
-## Authentication
-
-```bash
-# Authenticate with Dallas server
-kwauth --url https://klocwork.itg.ti.com:8090/
-
-# Or India server
-kwauth --url https://klocworkweb.india.ti.com:8095/
-```
-
-This creates an ltoken file at `~/.klocwork/ltoken`.
+- Klocwork client tools (kwadmin) in PATH
 
 ## Configuration
 
-Optional environment file: `~/.config/atlassian/.env` or `~/.config/klocwork-mcp/.env`
+Credentials: `~/.config/atlassian/.env` (primary) or `~/.config/klocwork-mcp/.env` (optional override)
 
+### Multi-Server Configuration
 ```bash
-KLOCWORK_DEFAULT_SERVER=dallas
+# List of configured servers
+KLOCWORK_SERVERS=india,stage
+
+# India server
+KLOCWORK_INDIA_URL=https://klocworkweb.india.ti.com:8095
+KLOCWORK_INDIA_USERNAME=your-username
+KLOCWORK_INDIA_TOKEN=your-ltoken
+
+# Stage server
+KLOCWORK_STAGE_URL=https://klocwork-stage.itg.ti.com:8090
+KLOCWORK_STAGE_USERNAME=your-username
+KLOCWORK_STAGE_TOKEN=your-ltoken
+
+# Default server
+KLOCWORK_DEFAULT_SERVER=india
 ```
 
+### Single Server (Legacy)
+```bash
+KLOCWORK_URL=https://klocworkweb.india.ti.com:8095
+KLOCWORK_USERNAME=your-username
+KLOCWORK_TOKEN=your-ltoken
+```
+
+### Getting Your Token
+
+1. Run: `kwauth --url https://klocworkweb.india.ti.com:8095`
+2. Check: `cat ~/.klocwork/ltoken`
+3. Format: `host;port;user;token` - copy the **4th field**
+
 ## Available Tools
+
+**Note:** All tools accept an optional `server` parameter ('india' or 'stage'). Defaults to KLOCWORK_DEFAULT_SERVER.
 
 ### Server Operations
 | Tool | Description |
 |------|-------------|
-| `klocwork_list_servers` | List configured Klocwork servers |
+| `klocwork_list_servers` | List all configured servers |
+| `klocwork_get_config` | Get current server configuration |
 | `klocwork_get_server_info` | Get server version and info |
 
 ### Project Operations
@@ -89,36 +107,19 @@ KLOCWORK_DEFAULT_SERVER=dallas
 |------|-------------|
 | `klocwork_raw_kwadmin` | Execute any kwadmin command |
 
-**Usage:**
-```python
-klocwork_raw_kwadmin(command="list-projects", args=[])
-klocwork_raw_kwadmin(command="get-project", args=["PROJECT_NAME"], server="india")
-```
-
-## Server URLs
-
-| Location | URL |
-|----------|-----|
-| Dallas | https://klocwork.itg.ti.com:8090/ |
-| India | https://klocworkweb.india.ti.com:8095/ |
-
-**Note:** All tools accept an optional `server` parameter ('dallas' or 'india'). Defaults to dallas.
-
 ## Usage Examples
 
-### Create a Project
+### Create a Project on Stage Server
 ```
-User: "Create a new Klocwork project called OTP_KW_F29H85X"
-Claude: [Calls klocwork_create_project with project_name="OTP_KW_F29H85X"]
+User: "Create a new Klocwork project called TEST_PROJECT on stage server"
+Claude: [Calls klocwork_create_project with project_name="TEST_PROJECT", server="stage"]
         ✓ Project created!
-        URL: https://klocwork.itg.ti.com:8090/review/insight-review.html#goto:project=OTP_KW_F29H85X
 ```
 
-### Create with Reference Project
+### List Projects on India Server
 ```
-User: "Create NEW_AUTOMOTIVE_PROJECT using AUTOMOTIVE_REFERENCE as template"
-Claude: [Calls klocwork_create_project with reference_project="AUTOMOTIVE_REFERENCE"]
-        ✓ Project created with configuration from AUTOMOTIVE_REFERENCE
+User: "List all Klocwork projects on India"
+Claude: [Calls klocwork_list_projects with server="india"]
 ```
 
 ### Replicate Modules
@@ -128,25 +129,14 @@ Claude: [Calls klocwork_replicate_modules]
         ✓ 12 modules copied successfully
 ```
 
-### Add User Permission
-```
-User: "Give john_doe admin access to MY_PROJECT on the India server"
-Claude: [Calls klocwork_add_user with server="india", role="admin"]
-        ✓ User john_doe added as admin
-```
-
 ## Quick Start
 
 ```bash
-# Install uv if needed
-curl -LsSf https://astral.sh/uv/install.sh | sh
-
 # Install dependencies
 cd klocwork-mcp
 uv sync
 
-# Authenticate with Klocwork
-kwauth --url https://klocwork.itg.ti.com:8090/
+# Configure credentials in ~/.config/atlassian/.env
 
 # Run the server
 uv run python mcp_server.py
@@ -154,7 +144,7 @@ uv run python mcp_server.py
 
 ## Key Files
 
-- `mcp_server.py` - Main entry point
+- `mcp_server.py` - Main entry point (22 tools)
 - `klocwork_client.py` - Klocwork API client (kwadmin wrapper)
 - `pyproject.toml` - Project configuration for uv
 - `requirements.txt` - Python dependencies

@@ -4,15 +4,12 @@ Klocwork MCP Server
 
 MCP server for Klocwork project management operations.
 Supports project creation, configuration import, module replication,
-and permission management across multiple Klocwork servers.
+and permission management.
 """
 
 import asyncio
 import json
-import os
-import sys
 from pathlib import Path
-from typing import Any
 
 from dotenv import load_dotenv
 from mcp.server import Server
@@ -22,7 +19,7 @@ from mcp.types import (
     Tool,
 )
 
-from klocwork_client import KlocworkClient, KLOCWORK_SERVERS
+from klocwork_client import KlocworkClient
 
 # Load environment variables
 # Primary: shared atlassian config location
@@ -38,13 +35,9 @@ if secondary_env.exists():
 # Initialize the MCP server
 server = Server("klocwork-mcp")
 
-# Default server from environment
-DEFAULT_SERVER = os.environ.get("KLOCWORK_DEFAULT_SERVER", "dallas")
-
-
-def get_client(server_name: str = None) -> KlocworkClient:
+def get_client(server: str = None) -> KlocworkClient:
     """Get a Klocwork client for the specified server."""
-    return KlocworkClient(server=server_name or DEFAULT_SERVER)
+    return KlocworkClient(server=server)
 
 
 def format_result(result: dict, title: str = None) -> str:
@@ -87,6 +80,12 @@ def format_result(result: dict, title: str = None) -> str:
     return "\n".join(lines)
 
 
+SERVER_PARAM = {
+    "type": "string",
+    "description": "Server name ('india' or 'stage'). Defaults to KLOCWORK_DEFAULT_SERVER."
+}
+
+
 @server.list_tools()
 async def list_tools() -> list[Tool]:
     """List available Klocwork tools."""
@@ -94,10 +93,21 @@ async def list_tools() -> list[Tool]:
         # Server Operations
         Tool(
             name="klocwork_list_servers",
-            description="List all configured Klocwork servers (Dallas and India)",
+            description="List all configured Klocwork servers",
             inputSchema={
                 "type": "object",
                 "properties": {},
+                "required": []
+            }
+        ),
+        Tool(
+            name="klocwork_get_config",
+            description="Get current Klocwork server configuration",
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "server": SERVER_PARAM
+                },
                 "required": []
             }
         ),
@@ -107,10 +117,7 @@ async def list_tools() -> list[Tool]:
             inputSchema={
                 "type": "object",
                 "properties": {
-                    "server": {
-                        "type": "string",
-                        "description": "Server name ('dallas' or 'india'). Defaults to dallas."
-                    }
+                    "server": SERVER_PARAM
                 },
                 "required": []
             }
@@ -123,10 +130,7 @@ async def list_tools() -> list[Tool]:
             inputSchema={
                 "type": "object",
                 "properties": {
-                    "server": {
-                        "type": "string",
-                        "description": "Server name ('dallas' or 'india'). Defaults to dallas."
-                    }
+                    "server": SERVER_PARAM
                 },
                 "required": []
             }
@@ -145,10 +149,7 @@ async def list_tools() -> list[Tool]:
                         "type": "string",
                         "description": "Optional reference project to copy configuration from"
                     },
-                    "server": {
-                        "type": "string",
-                        "description": "Server name ('dallas' or 'india'). Defaults to dallas."
-                    }
+                    "server": SERVER_PARAM
                 },
                 "required": ["project_name"]
             }
@@ -162,10 +163,6 @@ async def list_tools() -> list[Tool]:
                     "project_name": {
                         "type": "string",
                         "description": "Name of the project to delete"
-                    },
-                    "server": {
-                        "type": "string",
-                        "description": "Server name ('dallas' or 'india'). Defaults to dallas."
                     }
                 },
                 "required": ["project_name"]
@@ -180,10 +177,6 @@ async def list_tools() -> list[Tool]:
                     "project_name": {
                         "type": "string",
                         "description": "Name of the project"
-                    },
-                    "server": {
-                        "type": "string",
-                        "description": "Server name ('dallas' or 'india'). Defaults to dallas."
                     }
                 },
                 "required": ["project_name"]
@@ -204,10 +197,6 @@ async def list_tools() -> list[Tool]:
                     "target_project": {
                         "type": "string",
                         "description": "Project to copy configuration to"
-                    },
-                    "server": {
-                        "type": "string",
-                        "description": "Server name ('dallas' or 'india'). Defaults to dallas."
                     }
                 },
                 "required": ["source_project", "target_project"]
@@ -226,10 +215,6 @@ async def list_tools() -> list[Tool]:
                     "output_file": {
                         "type": "string",
                         "description": "Path to save the configuration file"
-                    },
-                    "server": {
-                        "type": "string",
-                        "description": "Server name ('dallas' or 'india'). Defaults to dallas."
                     }
                 },
                 "required": ["project_name", "output_file"]
@@ -248,10 +233,6 @@ async def list_tools() -> list[Tool]:
                     "config_file": {
                         "type": "string",
                         "description": "Path to the configuration file"
-                    },
-                    "server": {
-                        "type": "string",
-                        "description": "Server name ('dallas' or 'india'). Defaults to dallas."
                     }
                 },
                 "required": ["project_name", "config_file"]
@@ -268,10 +249,6 @@ async def list_tools() -> list[Tool]:
                     "project_name": {
                         "type": "string",
                         "description": "Project to list modules from"
-                    },
-                    "server": {
-                        "type": "string",
-                        "description": "Server name ('dallas' or 'india'). Defaults to dallas."
                     }
                 },
                 "required": ["project_name"]
@@ -295,10 +272,6 @@ async def list_tools() -> list[Tool]:
                         "type": "array",
                         "items": {"type": "string"},
                         "description": "Optional list of file paths to include in the module"
-                    },
-                    "server": {
-                        "type": "string",
-                        "description": "Server name ('dallas' or 'india'). Defaults to dallas."
                     }
                 },
                 "required": ["project_name", "module_name"]
@@ -317,10 +290,6 @@ async def list_tools() -> list[Tool]:
                     "module_name": {
                         "type": "string",
                         "description": "Name of the module to delete"
-                    },
-                    "server": {
-                        "type": "string",
-                        "description": "Server name ('dallas' or 'india'). Defaults to dallas."
                     }
                 },
                 "required": ["project_name", "module_name"]
@@ -339,10 +308,6 @@ async def list_tools() -> list[Tool]:
                     "target_project": {
                         "type": "string",
                         "description": "Project to copy modules to"
-                    },
-                    "server": {
-                        "type": "string",
-                        "description": "Server name ('dallas' or 'india'). Defaults to dallas."
                     }
                 },
                 "required": ["source_project", "target_project"]
@@ -359,10 +324,6 @@ async def list_tools() -> list[Tool]:
                     "project_name": {
                         "type": "string",
                         "description": "Project to list users for"
-                    },
-                    "server": {
-                        "type": "string",
-                        "description": "Server name ('dallas' or 'india'). Defaults to dallas."
                     }
                 },
                 "required": ["project_name"]
@@ -386,10 +347,6 @@ async def list_tools() -> list[Tool]:
                         "type": "string",
                         "description": "Role to assign ('admin', 'user', 'viewer'). Defaults to 'user'.",
                         "enum": ["admin", "user", "viewer"]
-                    },
-                    "server": {
-                        "type": "string",
-                        "description": "Server name ('dallas' or 'india'). Defaults to dallas."
                     }
                 },
                 "required": ["project_name", "username"]
@@ -408,10 +365,6 @@ async def list_tools() -> list[Tool]:
                     "username": {
                         "type": "string",
                         "description": "Username to remove"
-                    },
-                    "server": {
-                        "type": "string",
-                        "description": "Server name ('dallas' or 'india'). Defaults to dallas."
                     }
                 },
                 "required": ["project_name", "username"]
@@ -435,10 +388,6 @@ async def list_tools() -> list[Tool]:
                         "type": "string",
                         "description": "New role ('admin', 'user', 'viewer')",
                         "enum": ["admin", "user", "viewer"]
-                    },
-                    "server": {
-                        "type": "string",
-                        "description": "Server name ('dallas' or 'india'). Defaults to dallas."
                     }
                 },
                 "required": ["project_name", "username", "role"]
@@ -459,10 +408,6 @@ async def list_tools() -> list[Tool]:
                     "limit": {
                         "type": "integer",
                         "description": "Maximum number of builds to return (default: 10)"
-                    },
-                    "server": {
-                        "type": "string",
-                        "description": "Server name ('dallas' or 'india'). Defaults to dallas."
                     }
                 },
                 "required": ["project_name"]
@@ -481,10 +426,6 @@ async def list_tools() -> list[Tool]:
                     "build_id": {
                         "type": "string",
                         "description": "Build ID to get info for"
-                    },
-                    "server": {
-                        "type": "string",
-                        "description": "Server name ('dallas' or 'india'). Defaults to dallas."
                     }
                 },
                 "required": ["project_name", "build_id"]
@@ -517,10 +458,6 @@ async def list_tools() -> list[Tool]:
                     "limit": {
                         "type": "integer",
                         "description": "Maximum number of results (default: 100)"
-                    },
-                    "server": {
-                        "type": "string",
-                        "description": "Server name ('dallas' or 'india'). Defaults to dallas."
                     }
                 },
                 "required": ["project_name"]
@@ -539,10 +476,6 @@ async def list_tools() -> list[Tool]:
                     "issue_id": {
                         "type": "string",
                         "description": "Issue ID"
-                    },
-                    "server": {
-                        "type": "string",
-                        "description": "Server name ('dallas' or 'india'). Defaults to dallas."
                     }
                 },
                 "required": ["project_name", "issue_id"]
@@ -570,10 +503,6 @@ async def list_tools() -> list[Tool]:
                     "comment": {
                         "type": "string",
                         "description": "Optional comment explaining the status change"
-                    },
-                    "server": {
-                        "type": "string",
-                        "description": "Server name ('dallas' or 'india'). Defaults to dallas."
                     }
                 },
                 "required": ["project_name", "issue_id", "status"]
@@ -595,10 +524,6 @@ async def list_tools() -> list[Tool]:
                         "type": "array",
                         "items": {"type": "string"},
                         "description": "Arguments for the command"
-                    },
-                    "server": {
-                        "type": "string",
-                        "description": "Server name ('dallas' or 'india'). Defaults to dallas."
                     }
                 },
                 "required": ["command"]
@@ -611,6 +536,7 @@ async def list_tools() -> list[Tool]:
 async def call_tool(name: str, arguments: dict) -> list[TextContent]:
     """Handle tool calls."""
     try:
+        # Extract server parameter if provided
         server_name = arguments.pop("server", None)
         client = get_client(server_name)
 
@@ -619,9 +545,19 @@ async def call_tool(name: str, arguments: dict) -> list[TextContent]:
             result = client.list_servers()
             lines = ["## Configured Klocwork Servers", ""]
             for srv in result.get("servers", []):
-                lines.append(f"- **{srv['name']}**: {srv['url']}")
+                lines.append(f"- **{srv['name']}**: {srv['url']} (user: {srv['username']})")
             lines.append("")
-            lines.append(f"**Current/Default:** {result['current_server']['name']}")
+            lines.append(f"**Default server:** {result.get('default_server', 'N/A')}")
+            lines.append(f"**Current server:** {result.get('current_server', 'N/A')}")
+            return [TextContent(type="text", text="\n".join(lines))]
+
+        elif name == "klocwork_get_config":
+            result = client.get_config()
+            lines = ["## Klocwork Configuration", ""]
+            lines.append(f"**Server:** {result['server']}")
+            lines.append(f"**URL:** {result['url']}")
+            lines.append(f"**Username:** {result['username']}")
+            lines.append(f"**Token configured:** {'Yes' if result['token_configured'] else 'No'}")
             return [TextContent(type="text", text="\n".join(lines))]
 
         elif name == "klocwork_get_server_info":
