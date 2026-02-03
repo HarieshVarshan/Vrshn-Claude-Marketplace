@@ -6,7 +6,7 @@ MCP server for Jenkins Server via REST API (read-only operations). Supports mult
 
 ## Configuration
 
-Credentials: `~/.config/jenkins-mcp/.env` (or `~/.config/atlassian/.env`)
+Credentials: `~/.config/atlassian/.env` (primary) or `~/.config/jenkins-mcp/.env` (optional override)
 
 ### Single Server (Legacy)
 ```bash

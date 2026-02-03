@@ -6,7 +6,7 @@ MCP server for Bitbucket Server/Data Center via REST API.
 
 ## Configuration
 
-Credentials: `~/.config/bitbucket-mcp/.env` (or `~/.config/atlassian/.env`)
+Credentials: `~/.config/atlassian/.env` (primary) or `~/.config/bitbucket-mcp/.env` (optional override)
 
 ```bash
 BITBUCKET_URL=https://bitbucket.example.com

@@ -6,7 +6,7 @@ MCP server for Confluence Data Center/Server via REST API.
 
 ## Configuration
 
-Credentials: `~/.config/confluence-mcp/.env` (or `~/.config/atlassian/.env`)
+Credentials: `~/.config/atlassian/.env` (primary) or `~/.config/confluence-mcp/.env` (optional override)
 
 ```bash
 CONFLUENCE_URL=https://confluence.example.com

@@ -14,17 +14,19 @@ class BitbucketConfig:
     """Configuration loader for Bitbucket credentials."""
 
     def __init__(self, config_path: Optional[str] = None):
-        config_path = config_path or os.environ.get(
+        # Primary: common atlassian config
+        atlassian_config = os.path.expanduser('~/.config/atlassian/.env')
+        # Override: service-specific config (optional)
+        service_config = config_path or os.environ.get(
             'BITBUCKET_CONFIG',
             os.path.expanduser('~/.config/bitbucket-mcp/.env')
         )
-        # Also check atlassian config for backwards compatibility
-        atlassian_config = os.path.expanduser('~/.config/atlassian/.env')
 
-        if os.path.exists(config_path):
-            load_dotenv(config_path)
-        elif os.path.exists(atlassian_config):
+        # Load atlassian config first, then override with service-specific if exists
+        if os.path.exists(atlassian_config):
             load_dotenv(atlassian_config)
+        if os.path.exists(service_config):
+            load_dotenv(service_config, override=True)
 
         # Bitbucket config
         self.bitbucket_url = os.environ.get('BITBUCKET_URL', '').rstrip('/')

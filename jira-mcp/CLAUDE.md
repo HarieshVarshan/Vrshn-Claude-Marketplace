@@ -6,7 +6,7 @@ MCP server for comprehensive Jira Data Center/Server administration via REST API
 
 ## Configuration
 
-Credentials: `~/.config/jira-mcp/.env` (or `~/.config/atlassian/.env` for backwards compatibility)
+Credentials: `~/.config/atlassian/.env` (primary) or `~/.config/jira-mcp/.env` (optional override)
 
 ```bash
 JIRA_URL=https://jira.example.com
