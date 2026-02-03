@@ -25,7 +25,24 @@ This MCP server provides tools for interacting with Jira, Confluence, Bitbucket,
 | `confluence_get_space_pages` | List pages in space |
 | `confluence_create_page` | Create a new page |
 | `confluence_update_page` | Update page content |
+| `confluence_delete_page` | Delete a page |
 | `confluence_add_comment` | Add comment to a page |
+| `confluence_get_page_children` | Get child pages |
+| `confluence_get_page_ancestors` | Get parent hierarchy |
+| `confluence_get_page_descendants` | Get all descendant pages (recursive) |
+| `confluence_move_page` | Move page to different space/parent |
+| `confluence_copy_page` | Copy page to new location |
+| `confluence_list_page_versions` | List all versions of a page |
+| `confluence_get_page_version` | Read specific historical version |
+| `confluence_create_space` | Create a new space |
+| `confluence_update_space` | Update space name/description |
+| `confluence_delete_space` | Delete a space |
+| `confluence_upload_attachment` | Upload file to page |
+| `confluence_download_attachment` | Download attachment |
+| `confluence_delete_attachment` | Delete an attachment |
+| `confluence_get_page_restrictions` | Get view/edit restrictions |
+| `confluence_set_page_restrictions` | Set view/edit restrictions |
+| `confluence_search_users` | Search for users |
 
 ### Bitbucket
 | Tool | Description |

@@ -325,6 +325,255 @@ class ConfluenceClient:
         response.raise_for_status()
         return response.json()
 
+    def list_page_versions(self, page_id_or_url: str, limit: int = 25) -> Dict[str, Any]:
+        """List all versions of a page."""
+        page_id = self._parse_page_id(page_id_or_url)
+        url = f"{self.base_url}/rest/api/content/{page_id}/version"
+        params = {'limit': limit, 'expand': 'content'}
+        response = self.session.get(url, params=params)
+        response.raise_for_status()
+        return response.json()
+
+    def get_page_version(self, page_id_or_url: str, version_number: int) -> Dict[str, Any]:
+        """Get a specific version of a page."""
+        page_id = self._parse_page_id(page_id_or_url)
+        url = f"{self.base_url}/rest/api/content/{page_id}/version/{version_number}"
+        params = {'expand': 'content.body.storage'}
+        response = self.session.get(url, params=params)
+        response.raise_for_status()
+        return response.json()
+
+    # ==================== Page Operations ====================
+
+    def move_page(self, page_id_or_url: str, target_space_key: str = None,
+                  target_parent_id: str = None) -> Dict[str, Any]:
+        """Move a page to a different location or space."""
+        page_id = self._parse_page_id(page_id_or_url)
+        current_page = self.get_page(page_id)
+        current_version = current_page.get('version', {}).get('number', 1)
+
+        url = f"{self.base_url}/rest/api/content/{page_id}"
+        payload: Dict[str, Any] = {
+            'type': 'page',
+            'title': current_page.get('title'),
+            'version': {'number': current_version + 1}
+        }
+
+        if target_space_key:
+            payload['space'] = {'key': target_space_key}
+
+        if target_parent_id:
+            payload['ancestors'] = [{'id': target_parent_id}]
+
+        response = self.session.put(url, json=payload)
+        response.raise_for_status()
+        return response.json()
+
+    def copy_page(self, page_id_or_url: str, destination_space_key: str = None,
+                  destination_parent_id: str = None, new_title: str = None,
+                  copy_labels: bool = True, copy_attachments: bool = False) -> Dict[str, Any]:
+        """Copy a page to a new location."""
+        page_id = self._parse_page_id(page_id_or_url)
+        source_page = self.get_page(page_id)
+
+        space_key = destination_space_key or source_page.get('space', {}).get('key')
+        title = new_title or f"Copy of {source_page.get('title')}"
+        content = source_page.get('body', {}).get('storage', {}).get('value', '')
+
+        # Create the copy
+        new_page = self.create_page(space_key, title, content, destination_parent_id)
+
+        # Copy labels if requested
+        if copy_labels:
+            labels = self.get_page_labels(page_id)
+            for label in labels:
+                try:
+                    self.add_page_label(new_page['id'], label.get('name'))
+                except Exception:
+                    pass  # Ignore label copy failures
+
+        return new_page
+
+    def get_page_descendants(self, page_id_or_url: str, limit: int = 100) -> Dict[str, Any]:
+        """Get all descendant pages (recursive children)."""
+        page_id = self._parse_page_id(page_id_or_url)
+        url = f"{self.base_url}/rest/api/content/{page_id}/descendant/page"
+        params = {'limit': limit, 'expand': 'version'}
+        response = self.session.get(url, params=params)
+        response.raise_for_status()
+        return response.json()
+
+    # ==================== Space Management ====================
+
+    def create_space(self, space_key: str, name: str, description: str = None) -> Dict[str, Any]:
+        """Create a new space."""
+        url = f"{self.base_url}/rest/api/space"
+        payload: Dict[str, Any] = {
+            'key': space_key,
+            'name': name
+        }
+        if description:
+            payload['description'] = {
+                'plain': {'value': description, 'representation': 'plain'}
+            }
+        response = self.session.post(url, json=payload)
+        response.raise_for_status()
+        return response.json()
+
+    def update_space(self, space_key: str, name: str = None, description: str = None) -> Dict[str, Any]:
+        """Update a space's name or description."""
+        url = f"{self.base_url}/rest/api/space/{space_key}"
+        payload: Dict[str, Any] = {}
+        if name:
+            payload['name'] = name
+        if description:
+            payload['description'] = {
+                'plain': {'value': description, 'representation': 'plain'}
+            }
+        response = self.session.put(url, json=payload)
+        response.raise_for_status()
+        return response.json()
+
+    def delete_space(self, space_key: str) -> None:
+        """Delete a space."""
+        url = f"{self.base_url}/rest/api/space/{space_key}"
+        response = self.session.delete(url)
+        response.raise_for_status()
+
+    # ==================== Attachment Management ====================
+
+    def get_attachment(self, attachment_id: str) -> Dict[str, Any]:
+        """Get attachment metadata."""
+        url = f"{self.base_url}/rest/api/content/{attachment_id}"
+        params = {'expand': 'version,container'}
+        response = self.session.get(url, params=params)
+        response.raise_for_status()
+        return response.json()
+
+    def upload_attachment(self, page_id_or_url: str, file_path: str,
+                          comment: str = None) -> Dict[str, Any]:
+        """Upload an attachment to a page."""
+        page_id = self._parse_page_id(page_id_or_url)
+        url = f"{self.base_url}/rest/api/content/{page_id}/child/attachment"
+
+        # Need to use multipart/form-data for file upload
+        headers = {
+            'X-Atlassian-Token': 'nocheck',
+            'Authorization': f'Bearer {self.token}'
+        }
+
+        with open(file_path, 'rb') as f:
+            files = {'file': f}
+            data = {}
+            if comment:
+                data['comment'] = comment
+
+            # Remove Content-Type header for multipart
+            session_headers = dict(self.session.headers)
+            session_headers.pop('Content-Type', None)
+            session_headers.update(headers)
+
+            response = requests.post(url, files=files, data=data,
+                                     headers=session_headers,
+                                     verify=self.session.verify)
+
+        response.raise_for_status()
+        return response.json()
+
+    def download_attachment(self, attachment_id: str, download_path: str) -> str:
+        """Download an attachment to local filesystem."""
+        attachment = self.get_attachment(attachment_id)
+        download_url = attachment.get('_links', {}).get('download', '')
+
+        if not download_url:
+            raise ValueError("No download URL found for attachment")
+
+        full_url = f"{self.base_url}{download_url}"
+        response = self.session.get(full_url, stream=True)
+        response.raise_for_status()
+
+        with open(download_path, 'wb') as f:
+            for chunk in response.iter_content(chunk_size=8192):
+                f.write(chunk)
+
+        return download_path
+
+    def delete_attachment(self, attachment_id: str) -> None:
+        """Delete an attachment."""
+        url = f"{self.base_url}/rest/api/content/{attachment_id}"
+        response = self.session.delete(url)
+        response.raise_for_status()
+
+    # ==================== Page Restrictions ====================
+
+    def get_page_restrictions(self, page_id_or_url: str) -> Dict[str, Any]:
+        """Get view/edit restrictions for a page."""
+        page_id = self._parse_page_id(page_id_or_url)
+        url = f"{self.base_url}/rest/api/content/{page_id}/restriction"
+        response = self.session.get(url)
+        response.raise_for_status()
+        return response.json()
+
+    def set_page_restrictions(self, page_id_or_url: str, operation: str,
+                               users: List[str] = None,
+                               groups: List[str] = None) -> Dict[str, Any]:
+        """Set view/edit restrictions for a page.
+
+        Args:
+            page_id_or_url: Page ID or URL
+            operation: 'read' for view restrictions, 'update' for edit restrictions
+            users: List of usernames to grant access
+            groups: List of group names to grant access
+        """
+        page_id = self._parse_page_id(page_id_or_url)
+        url = f"{self.base_url}/rest/api/content/{page_id}/restriction"
+
+        restrictions = []
+        if users:
+            for user in users:
+                restrictions.append({
+                    'operation': operation,
+                    'restrictions': {
+                        'user': [{'type': 'known', 'username': user}]
+                    }
+                })
+        if groups:
+            for group in groups:
+                restrictions.append({
+                    'operation': operation,
+                    'restrictions': {
+                        'group': [{'type': 'group', 'name': group}]
+                    }
+                })
+
+        response = self.session.put(url, json=restrictions)
+        response.raise_for_status()
+        return response.json()
+
+    def remove_page_restrictions(self, page_id_or_url: str) -> None:
+        """Remove all restrictions from a page."""
+        page_id = self._parse_page_id(page_id_or_url)
+        url = f"{self.base_url}/rest/api/content/{page_id}/restriction"
+        response = self.session.delete(url)
+        response.raise_for_status()
+
+    # ==================== Users ====================
+
+    def search_users(self, query: str, limit: int = 25) -> List[Dict[str, Any]]:
+        """Search for Confluence users."""
+        url = f"{self.base_url}/rest/api/search/user"
+        params = {'cql': f'user.fullname ~ "{query}" OR user.username ~ "{query}"', 'limit': limit}
+        response = self.session.get(url, params=params)
+        response.raise_for_status()
+        return response.json().get('results', [])
+
+    def get_current_user(self) -> Dict[str, Any]:
+        """Get the currently authenticated user."""
+        url = f"{self.base_url}/rest/api/user/current"
+        response = self.session.get(url)
+        response.raise_for_status()
+        return response.json()
+
     # ==================== Raw API ====================
 
     def raw_api(self, method: str, endpoint: str,

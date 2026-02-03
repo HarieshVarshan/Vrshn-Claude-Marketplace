@@ -274,7 +274,7 @@ async def list_tools() -> list[Tool]:
             }
         ),
 
-        # ========== History ==========
+        # ========== History & Versions ==========
         Tool(
             name="confluence_get_page_history",
             description="Get page version history.",
@@ -284,6 +284,221 @@ async def list_tools() -> list[Tool]:
                     "page_id": {"type": "string", "description": "Page ID or URL"}
                 },
                 "required": ["page_id"]
+            }
+        ),
+        Tool(
+            name="confluence_list_page_versions",
+            description="List all versions of a page.",
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "page_id": {"type": "string", "description": "Page ID or URL"},
+                    "limit": {"type": "integer", "description": "Max results", "default": 25}
+                },
+                "required": ["page_id"]
+            }
+        ),
+        Tool(
+            name="confluence_get_page_version",
+            description="Read a specific historical version of a page.",
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "page_id": {"type": "string", "description": "Page ID or URL"},
+                    "version_number": {"type": "integer", "description": "Version number to read"}
+                },
+                "required": ["page_id", "version_number"]
+            }
+        ),
+
+        # ========== Page Move/Copy ==========
+        Tool(
+            name="confluence_move_page",
+            description="Move a page to a different space or parent.",
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "page_id": {"type": "string", "description": "Page ID or URL"},
+                    "target_space_key": {"type": "string", "description": "Destination space key"},
+                    "target_parent_id": {"type": "string", "description": "New parent page ID"}
+                },
+                "required": ["page_id"]
+            }
+        ),
+        Tool(
+            name="confluence_copy_page",
+            description="Copy a page to a new location.",
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "page_id": {"type": "string", "description": "Source page ID or URL"},
+                    "destination_space_key": {"type": "string", "description": "Destination space key"},
+                    "destination_parent_id": {"type": "string", "description": "Destination parent page ID"},
+                    "new_title": {"type": "string", "description": "Title for the copy"},
+                    "copy_labels": {"type": "boolean", "description": "Copy labels", "default": True}
+                },
+                "required": ["page_id"]
+            }
+        ),
+        Tool(
+            name="confluence_get_page_descendants",
+            description="Get all descendant pages (recursive children).",
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "page_id": {"type": "string", "description": "Page ID or URL"},
+                    "limit": {"type": "integer", "description": "Max results", "default": 100}
+                },
+                "required": ["page_id"]
+            }
+        ),
+
+        # ========== Space Management ==========
+        Tool(
+            name="confluence_create_space",
+            description="Create a new Confluence space.",
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "space_key": {"type": "string", "description": "Unique space key (uppercase)"},
+                    "name": {"type": "string", "description": "Space name"},
+                    "description": {"type": "string", "description": "Space description"}
+                },
+                "required": ["space_key", "name"]
+            }
+        ),
+        Tool(
+            name="confluence_update_space",
+            description="Update a space's name or description.",
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "space_key": {"type": "string", "description": "Space key"},
+                    "name": {"type": "string", "description": "New name"},
+                    "description": {"type": "string", "description": "New description"}
+                },
+                "required": ["space_key"]
+            }
+        ),
+        Tool(
+            name="confluence_delete_space",
+            description="Delete a Confluence space.",
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "space_key": {"type": "string", "description": "Space key"}
+                },
+                "required": ["space_key"]
+            }
+        ),
+
+        # ========== Attachment Management ==========
+        Tool(
+            name="confluence_get_attachment",
+            description="Get attachment metadata.",
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "attachment_id": {"type": "string", "description": "Attachment ID"}
+                },
+                "required": ["attachment_id"]
+            }
+        ),
+        Tool(
+            name="confluence_upload_attachment",
+            description="Upload an attachment to a page.",
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "page_id": {"type": "string", "description": "Page ID or URL"},
+                    "file_path": {"type": "string", "description": "Local file path to upload"},
+                    "comment": {"type": "string", "description": "Attachment comment"}
+                },
+                "required": ["page_id", "file_path"]
+            }
+        ),
+        Tool(
+            name="confluence_download_attachment",
+            description="Download an attachment to local filesystem.",
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "attachment_id": {"type": "string", "description": "Attachment ID"},
+                    "download_path": {"type": "string", "description": "Local path to save file"}
+                },
+                "required": ["attachment_id", "download_path"]
+            }
+        ),
+        Tool(
+            name="confluence_delete_attachment",
+            description="Delete an attachment.",
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "attachment_id": {"type": "string", "description": "Attachment ID"}
+                },
+                "required": ["attachment_id"]
+            }
+        ),
+
+        # ========== Page Restrictions ==========
+        Tool(
+            name="confluence_get_page_restrictions",
+            description="Get view/edit restrictions for a page.",
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "page_id": {"type": "string", "description": "Page ID or URL"}
+                },
+                "required": ["page_id"]
+            }
+        ),
+        Tool(
+            name="confluence_set_page_restrictions",
+            description="Set view/edit restrictions for a page.",
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "page_id": {"type": "string", "description": "Page ID or URL"},
+                    "operation": {"type": "string", "description": "'read' for view, 'update' for edit"},
+                    "users": {"type": "array", "items": {"type": "string"}, "description": "Usernames to grant access"},
+                    "groups": {"type": "array", "items": {"type": "string"}, "description": "Groups to grant access"}
+                },
+                "required": ["page_id", "operation"]
+            }
+        ),
+        Tool(
+            name="confluence_remove_page_restrictions",
+            description="Remove all restrictions from a page.",
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "page_id": {"type": "string", "description": "Page ID or URL"}
+                },
+                "required": ["page_id"]
+            }
+        ),
+
+        # ========== Users ==========
+        Tool(
+            name="confluence_search_users",
+            description="Search for Confluence users.",
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "query": {"type": "string", "description": "Search query (name or username)"},
+                    "limit": {"type": "integer", "description": "Max results", "default": 25}
+                },
+                "required": ["query"]
+            }
+        ),
+        Tool(
+            name="confluence_get_current_user",
+            description="Get the currently authenticated user.",
+            inputSchema={
+                "type": "object",
+                "properties": {},
+                "required": []
             }
         ),
 
@@ -438,6 +653,174 @@ async def call_tool(name: str, arguments: dict[str, Any]) -> list[TextContent]:
             if history.get('createdBy'):
                 output.append(f"**Created By:** {history['createdBy'].get('displayName', 'Unknown')}")
             output.append(f"**Latest Version:** {history.get('lastUpdated', {}).get('number', 'Unknown')}")
+            result = '\n'.join(output)
+
+        # ========== Page Versions ==========
+        elif name == "confluence_list_page_versions":
+            versions = client.list_page_versions(arguments["page_id"], arguments.get("limit", 25))
+            output = [f"# Page Versions ({len(versions.get('results', []))} found)\n"]
+            for v in versions.get('results', []):
+                by_name = v.get('by', {}).get('displayName', 'Unknown')
+                output.append(f"- **v{v.get('number')}**: {v.get('when', 'Unknown')} by {by_name}")
+                if v.get('message'):
+                    output.append(f"  _{v.get('message')}_")
+            result = '\n'.join(output)
+
+        elif name == "confluence_get_page_version":
+            version = client.get_page_version(arguments["page_id"], arguments["version_number"])
+            output = [f"# Page Version {version.get('number')}"]
+            output.append(f"**When:** {version.get('when', 'Unknown')}")
+            if version.get('by'):
+                output.append(f"**By:** {version['by'].get('displayName', 'Unknown')}")
+            if version.get('message'):
+                output.append(f"**Message:** {version.get('message')}")
+            content = version.get('content', {})
+            if content:
+                body = content.get('body', {}).get('storage', {}).get('value', 'No content')
+                output.append("\n## Content")
+                output.append(body)
+            result = '\n'.join(output)
+
+        # ========== Page Move/Copy ==========
+        elif name == "confluence_move_page":
+            moved = client.move_page(
+                arguments["page_id"],
+                target_space_key=arguments.get("target_space_key"),
+                target_parent_id=arguments.get("target_parent_id")
+            )
+            result = f"Page moved: **{moved.get('title')}**\nNew version: {moved.get('version', {}).get('number')}"
+
+        elif name == "confluence_copy_page":
+            copied = client.copy_page(
+                arguments["page_id"],
+                destination_space_key=arguments.get("destination_space_key"),
+                destination_parent_id=arguments.get("destination_parent_id"),
+                new_title=arguments.get("new_title"),
+                copy_labels=arguments.get("copy_labels", True)
+            )
+            page_url = f"{client.base_url}/pages/viewpage.action?pageId={copied.get('id')}"
+            result = f"Page copied: **{copied.get('title')}**\nID: {copied.get('id')}\nURL: {page_url}"
+
+        elif name == "confluence_get_page_descendants":
+            descendants = client.get_page_descendants(arguments["page_id"], arguments.get("limit", 100))
+            result = format_pages_list(descendants.get('results', []), "Descendant Pages")
+
+        # ========== Space Management ==========
+        elif name == "confluence_create_space":
+            created = client.create_space(
+                arguments["space_key"],
+                arguments["name"],
+                arguments.get("description")
+            )
+            result = f"Space created: **{created.get('name')}**\nKey: {created.get('key')}"
+
+        elif name == "confluence_update_space":
+            updated = client.update_space(
+                arguments["space_key"],
+                name=arguments.get("name"),
+                description=arguments.get("description")
+            )
+            result = f"Space updated: **{updated.get('name')}**\nKey: {updated.get('key')}"
+
+        elif name == "confluence_delete_space":
+            client.delete_space(arguments["space_key"])
+            result = f"Space {arguments['space_key']} deleted."
+
+        # ========== Attachment Management ==========
+        elif name == "confluence_get_attachment":
+            attachment = client.get_attachment(arguments["attachment_id"])
+            output = [f"# Attachment: {attachment.get('title', 'Unknown')}"]
+            output.append(f"**ID:** {attachment.get('id')}")
+            output.append(f"**Type:** {attachment.get('metadata', {}).get('mediaType', 'Unknown')}")
+            container = attachment.get('container', {})
+            output.append(f"**Container:** {container.get('title', 'Unknown')} (ID: {container.get('id')})")
+            version = attachment.get('version', {})
+            output.append(f"**Version:** {version.get('number', 'Unknown')}")
+            result = '\n'.join(output)
+
+        elif name == "confluence_upload_attachment":
+            uploaded = client.upload_attachment(
+                arguments["page_id"],
+                arguments["file_path"],
+                arguments.get("comment")
+            )
+            results = uploaded.get('results', [uploaded])
+            if results:
+                att = results[0] if isinstance(results, list) else results
+                result = f"Attachment uploaded: **{att.get('title')}**\nID: {att.get('id')}"
+            else:
+                result = "Attachment uploaded successfully"
+
+        elif name == "confluence_download_attachment":
+            saved_path = client.download_attachment(
+                arguments["attachment_id"],
+                arguments["download_path"]
+            )
+            result = f"Attachment downloaded to: {saved_path}"
+
+        elif name == "confluence_delete_attachment":
+            client.delete_attachment(arguments["attachment_id"])
+            result = f"Attachment {arguments['attachment_id']} deleted."
+
+        # ========== Page Restrictions ==========
+        elif name == "confluence_get_page_restrictions":
+            restrictions = client.get_page_restrictions(arguments["page_id"])
+            output = ["# Page Restrictions"]
+            read_restrictions = restrictions.get('read', {}).get('restrictions', {})
+            edit_restrictions = restrictions.get('update', {}).get('restrictions', {})
+
+            output.append("\n## View Restrictions")
+            users = read_restrictions.get('user', {}).get('results', [])
+            groups = read_restrictions.get('group', {}).get('results', [])
+            if users:
+                output.append("**Users:** " + ", ".join(u.get('username', 'Unknown') for u in users))
+            if groups:
+                output.append("**Groups:** " + ", ".join(g.get('name', 'Unknown') for g in groups))
+            if not users and not groups:
+                output.append("_No view restrictions_")
+
+            output.append("\n## Edit Restrictions")
+            users = edit_restrictions.get('user', {}).get('results', [])
+            groups = edit_restrictions.get('group', {}).get('results', [])
+            if users:
+                output.append("**Users:** " + ", ".join(u.get('username', 'Unknown') for u in users))
+            if groups:
+                output.append("**Groups:** " + ", ".join(g.get('name', 'Unknown') for g in groups))
+            if not users and not groups:
+                output.append("_No edit restrictions_")
+
+            result = '\n'.join(output)
+
+        elif name == "confluence_set_page_restrictions":
+            client.set_page_restrictions(
+                arguments["page_id"],
+                arguments["operation"],
+                users=arguments.get("users"),
+                groups=arguments.get("groups")
+            )
+            op_name = "View" if arguments["operation"] == "read" else "Edit"
+            result = f"{op_name} restrictions set for page {arguments['page_id']}"
+
+        elif name == "confluence_remove_page_restrictions":
+            client.remove_page_restrictions(arguments["page_id"])
+            result = f"All restrictions removed from page {arguments['page_id']}"
+
+        # ========== Users ==========
+        elif name == "confluence_search_users":
+            users = client.search_users(arguments["query"], arguments.get("limit", 25))
+            output = [f"# Users ({len(users)} found)\n"]
+            for u in users:
+                user = u.get('user', u)
+                output.append(f"- **{user.get('displayName', 'Unknown')}** ({user.get('username', 'Unknown')})")
+            result = '\n'.join(output)
+
+        elif name == "confluence_get_current_user":
+            user = client.get_current_user()
+            output = ["# Current User"]
+            output.append(f"**Username:** {user.get('username', 'Unknown')}")
+            output.append(f"**Display Name:** {user.get('displayName', 'Unknown')}")
+            output.append(f"**Email:** {user.get('email', 'N/A')}")
+            output.append(f"**Type:** {user.get('type', 'Unknown')}")
             result = '\n'.join(output)
 
         # ========== Raw API ==========

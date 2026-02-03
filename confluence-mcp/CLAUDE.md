@@ -26,6 +26,9 @@ CONFLUENCE_TOKEN=your-api-token
 | `confluence_delete_page` | Delete a page |
 | `confluence_get_page_children` | Get child pages |
 | `confluence_get_page_ancestors` | Get parent hierarchy |
+| `confluence_get_page_descendants` | Get all descendant pages (recursive) |
+| `confluence_move_page` | Move page to different space/parent |
+| `confluence_copy_page` | Copy page to new location |
 
 ### Search
 | Tool | Description |
@@ -38,6 +41,9 @@ CONFLUENCE_TOKEN=your-api-token
 | `confluence_get_all_spaces` | List all spaces |
 | `confluence_get_space` | Get space details |
 | `confluence_get_space_pages` | List pages in space |
+| `confluence_create_space` | Create a new space |
+| `confluence_update_space` | Update space name/description |
+| `confluence_delete_space` | Delete a space |
 
 ### Comments
 | Tool | Description |
@@ -55,12 +61,31 @@ CONFLUENCE_TOKEN=your-api-token
 ### Attachments
 | Tool | Description |
 |------|-------------|
-| `confluence_get_page_attachments` | Get page attachments |
+| `confluence_get_page_attachments` | List attachments on a page |
+| `confluence_get_attachment` | Get attachment metadata |
+| `confluence_upload_attachment` | Upload file to page |
+| `confluence_download_attachment` | Download attachment to local filesystem |
+| `confluence_delete_attachment` | Delete an attachment |
 
-### History
+### History & Versions
 | Tool | Description |
 |------|-------------|
-| `confluence_get_page_history` | Get version history |
+| `confluence_get_page_history` | Get page history overview |
+| `confluence_list_page_versions` | List all versions of a page |
+| `confluence_get_page_version` | Read specific historical version content |
+
+### Page Restrictions
+| Tool | Description |
+|------|-------------|
+| `confluence_get_page_restrictions` | Get view/edit restrictions |
+| `confluence_set_page_restrictions` | Set view/edit restrictions |
+| `confluence_remove_page_restrictions` | Remove all restrictions |
+
+### Users
+| Tool | Description |
+|------|-------------|
+| `confluence_search_users` | Search for users |
+| `confluence_get_current_user` | Get authenticated user info |
 
 ### Raw API (Fallback)
 | Tool | Description |
