@@ -1,0 +1,449 @@
+#!/usr/bin/env python3
+"""
+Confluence MCP Server - Provides Confluence tools for Claude.
+
+Usage:
+    python mcp_server.py
+
+Environment Variables:
+    CONFLUENCE_CONFIG - Path to .env file (default: ~/.config/confluence-mcp/.env)
+"""
+
+import traceback
+from typing import Any
+
+from mcp.server import Server
+from mcp.server.stdio import stdio_server
+from mcp.types import Tool, TextContent
+
+from confluence_client import get_confluence_client
+
+# Create the MCP server
+server = Server("confluence")
+
+
+def format_page(page: dict) -> str:
+    """Format a Confluence page for display."""
+    output = []
+    output.append(f"# {page.get('title', 'Untitled')}")
+    output.append("")
+    output.append(f"**ID:** {page.get('id')}")
+    output.append(f"**Space:** {page.get('space', {}).get('key', 'Unknown')}")
+
+    version = page.get('version', {})
+    output.append(f"**Version:** {version.get('number', 'Unknown')}")
+    output.append(f"**Last Modified:** {version.get('when', 'Unknown')}")
+    if version.get('by'):
+        output.append(f"**Modified By:** {version['by'].get('displayName', 'Unknown')}")
+
+    output.append("")
+    output.append("## Content")
+    body = page.get('body', {})
+    content = body.get('view', {}).get('value') or body.get('storage', {}).get('value') or 'No content'
+    output.append(content)
+
+    return '\n'.join(output)
+
+
+def format_pages_list(pages: list, title: str = "Pages") -> str:
+    """Format a list of pages."""
+    output = [f"# {title} ({len(pages)} found)\n"]
+    for page in pages:
+        space = page.get('space', {}).get('key', 'Unknown')
+        page_title = page.get('title', 'Untitled')
+        page_id = page.get('id')
+        output.append(f"- [{space}] **{page_title}** (ID: {page_id})")
+    return '\n'.join(output)
+
+
+@server.list_tools()
+async def list_tools() -> list[Tool]:
+    """List all available Confluence tools."""
+    return [
+        # ========== Pages ==========
+        Tool(
+            name="confluence_get_page",
+            description="Get a Confluence page by ID or URL.",
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "page_id": {"type": "string", "description": "Page ID or full Confluence URL"}
+                },
+                "required": ["page_id"]
+            }
+        ),
+        Tool(
+            name="confluence_get_page_by_title",
+            description="Get a Confluence page by space key and title.",
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "space_key": {"type": "string", "description": "Space key (e.g., DOCS)"},
+                    "title": {"type": "string", "description": "Exact page title"}
+                },
+                "required": ["space_key", "title"]
+            }
+        ),
+        Tool(
+            name="confluence_create_page",
+            description="Create a new Confluence page. Content in Confluence storage format (XHTML).",
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "space_key": {"type": "string", "description": "Space key"},
+                    "title": {"type": "string", "description": "Page title"},
+                    "content": {"type": "string", "description": "Page content in XHTML"},
+                    "parent_id": {"type": "string", "description": "Optional parent page ID"}
+                },
+                "required": ["space_key", "title", "content"]
+            }
+        ),
+        Tool(
+            name="confluence_update_page",
+            description="Update an existing Confluence page.",
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "page_id": {"type": "string", "description": "Page ID"},
+                    "title": {"type": "string", "description": "New title"},
+                    "content": {"type": "string", "description": "New content in XHTML"}
+                },
+                "required": ["page_id", "title", "content"]
+            }
+        ),
+        Tool(
+            name="confluence_delete_page",
+            description="Delete a Confluence page.",
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "page_id": {"type": "string", "description": "Page ID or URL"}
+                },
+                "required": ["page_id"]
+            }
+        ),
+        Tool(
+            name="confluence_get_page_children",
+            description="Get child pages of a page.",
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "page_id": {"type": "string", "description": "Page ID or URL"},
+                    "limit": {"type": "integer", "description": "Max results", "default": 25}
+                },
+                "required": ["page_id"]
+            }
+        ),
+        Tool(
+            name="confluence_get_page_ancestors",
+            description="Get parent hierarchy of a page.",
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "page_id": {"type": "string", "description": "Page ID or URL"}
+                },
+                "required": ["page_id"]
+            }
+        ),
+
+        # ========== Search ==========
+        Tool(
+            name="confluence_search",
+            description="Search Confluence using CQL or text. Examples: 'text ~ \"term\"', 'space = DOCS'",
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "query": {"type": "string", "description": "Search query (text or CQL)"},
+                    "space_key": {"type": "string", "description": "Limit to space"},
+                    "limit": {"type": "integer", "description": "Max results", "default": 25}
+                },
+                "required": ["query"]
+            }
+        ),
+
+        # ========== Spaces ==========
+        Tool(
+            name="confluence_get_all_spaces",
+            description="List all Confluence spaces.",
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "limit": {"type": "integer", "description": "Max results", "default": 50}
+                },
+                "required": []
+            }
+        ),
+        Tool(
+            name="confluence_get_space",
+            description="Get space details.",
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "space_key": {"type": "string", "description": "Space key"}
+                },
+                "required": ["space_key"]
+            }
+        ),
+        Tool(
+            name="confluence_get_space_pages",
+            description="List all pages in a space.",
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "space_key": {"type": "string", "description": "Space key"},
+                    "limit": {"type": "integer", "description": "Max results", "default": 50}
+                },
+                "required": ["space_key"]
+            }
+        ),
+
+        # ========== Comments ==========
+        Tool(
+            name="confluence_add_comment",
+            description="Add a comment to a page.",
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "page_id": {"type": "string", "description": "Page ID"},
+                    "comment": {"type": "string", "description": "Comment text"}
+                },
+                "required": ["page_id", "comment"]
+            }
+        ),
+        Tool(
+            name="confluence_get_page_comments",
+            description="Get comments for a page.",
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "page_id": {"type": "string", "description": "Page ID or URL"},
+                    "limit": {"type": "integer", "description": "Max results", "default": 25}
+                },
+                "required": ["page_id"]
+            }
+        ),
+
+        # ========== Labels ==========
+        Tool(
+            name="confluence_get_page_labels",
+            description="Get labels for a page.",
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "page_id": {"type": "string", "description": "Page ID or URL"}
+                },
+                "required": ["page_id"]
+            }
+        ),
+        Tool(
+            name="confluence_add_page_label",
+            description="Add a label to a page.",
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "page_id": {"type": "string", "description": "Page ID or URL"},
+                    "label": {"type": "string", "description": "Label name"}
+                },
+                "required": ["page_id", "label"]
+            }
+        ),
+        Tool(
+            name="confluence_remove_page_label",
+            description="Remove a label from a page.",
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "page_id": {"type": "string", "description": "Page ID or URL"},
+                    "label": {"type": "string", "description": "Label name"}
+                },
+                "required": ["page_id", "label"]
+            }
+        ),
+
+        # ========== Attachments ==========
+        Tool(
+            name="confluence_get_page_attachments",
+            description="Get attachments for a page.",
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "page_id": {"type": "string", "description": "Page ID or URL"},
+                    "limit": {"type": "integer", "description": "Max results", "default": 25}
+                },
+                "required": ["page_id"]
+            }
+        ),
+
+        # ========== History ==========
+        Tool(
+            name="confluence_get_page_history",
+            description="Get page version history.",
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "page_id": {"type": "string", "description": "Page ID or URL"}
+                },
+                "required": ["page_id"]
+            }
+        ),
+    ]
+
+
+@server.call_tool()
+async def call_tool(name: str, arguments: dict[str, Any]) -> list[TextContent]:
+    """Handle tool calls."""
+    try:
+        client = get_confluence_client()
+        result = ""
+
+        # ========== Pages ==========
+        if name == "confluence_get_page":
+            page = client.get_page(arguments["page_id"])
+            result = format_page(page)
+
+        elif name == "confluence_get_page_by_title":
+            response = client.get_page_by_title(arguments["space_key"], arguments["title"])
+            pages = response.get('results', [])
+            if not pages:
+                result = f"No page found with title '{arguments['title']}' in space '{arguments['space_key']}'"
+            else:
+                page = client.get_page(pages[0]['id'])
+                result = format_page(page)
+
+        elif name == "confluence_create_page":
+            created = client.create_page(
+                space_key=arguments["space_key"],
+                title=arguments["title"],
+                content=arguments["content"],
+                parent_id=arguments.get("parent_id")
+            )
+            page_id = created.get('id')
+            page_url = f"{client.base_url}/pages/viewpage.action?pageId={page_id}"
+            result = f"Page created: **{arguments['title']}**\nID: {page_id}\nURL: {page_url}"
+
+        elif name == "confluence_update_page":
+            updated = client.update_page(
+                page_id=arguments["page_id"],
+                title=arguments["title"],
+                content=arguments["content"]
+            )
+            version = updated.get('version', {}).get('number', 'unknown')
+            result = f"Page updated: **{arguments['title']}**\nNew version: {version}"
+
+        elif name == "confluence_delete_page":
+            client.delete_page(arguments["page_id"])
+            result = f"Page {arguments['page_id']} deleted."
+
+        elif name == "confluence_get_page_children":
+            children = client.get_page_children(arguments["page_id"], arguments.get("limit", 25))
+            result = format_pages_list(children.get('results', []), "Child Pages")
+
+        elif name == "confluence_get_page_ancestors":
+            ancestors = client.get_page_ancestors(arguments["page_id"])
+            output = ["# Page Ancestors\n"]
+            for i, a in enumerate(ancestors):
+                indent = "  " * i
+                output.append(f"{indent}- **{a.get('title', 'Unknown')}** (ID: {a.get('id')})")
+            result = '\n'.join(output) if ancestors else "No ancestors (root page)"
+
+        # ========== Search ==========
+        elif name == "confluence_search":
+            space_key = arguments.get("space_key")
+            limit = arguments.get("limit", 25)
+            response = client.search_content(arguments["query"], space_key=space_key, limit=limit)
+            result = format_pages_list(response.get('results', []), "Search Results")
+
+        # ========== Spaces ==========
+        elif name == "confluence_get_all_spaces":
+            spaces = client.get_all_spaces(arguments.get("limit", 50))
+            output = [f"# Spaces ({len(spaces.get('results', []))} found)\n"]
+            for space in spaces.get('results', []):
+                desc = space.get('description', {}).get('plain', {}).get('value', 'N/A')
+                output.append(f"- **{space.get('key')}**: {space.get('name', 'Unknown')}")
+            result = '\n'.join(output)
+
+        elif name == "confluence_get_space":
+            space = client.get_space(arguments["space_key"])
+            output = [f"# Space: {space.get('name', 'Unknown')}"]
+            output.append(f"**Key:** {space.get('key')}")
+            output.append(f"**Type:** {space.get('type', 'N/A')}")
+            desc = space.get('description', {}).get('plain', {}).get('value', 'N/A')
+            output.append(f"**Description:** {desc}")
+            if space.get('homepage'):
+                output.append(f"**Homepage:** {space['homepage'].get('title', 'N/A')}")
+            result = '\n'.join(output)
+
+        elif name == "confluence_get_space_pages":
+            response = client.get_space_pages(arguments["space_key"], arguments.get("limit", 50))
+            result = format_pages_list(response.get('results', []), f"Pages in {arguments['space_key']}")
+
+        # ========== Comments ==========
+        elif name == "confluence_add_comment":
+            client.add_comment(arguments["page_id"], arguments["comment"])
+            result = f"Comment added to page {arguments['page_id']}"
+
+        elif name == "confluence_get_page_comments":
+            comments = client.get_page_comments(arguments["page_id"], arguments.get("limit", 25))
+            output = [f"# Comments ({len(comments.get('results', []))} found)\n"]
+            for c in comments.get('results', []):
+                body = c.get('body', {}).get('storage', {}).get('value', 'No content')
+                output.append(f"- {body[:200]}...")
+            result = '\n'.join(output)
+
+        # ========== Labels ==========
+        elif name == "confluence_get_page_labels":
+            labels = client.get_page_labels(arguments["page_id"])
+            output = [f"# Labels ({len(labels)} found)\n"]
+            for l in labels:
+                output.append(f"- {l.get('name', 'Unknown')}")
+            result = '\n'.join(output)
+
+        elif name == "confluence_add_page_label":
+            client.add_page_label(arguments["page_id"], arguments["label"])
+            result = f"Label '{arguments['label']}' added to page {arguments['page_id']}"
+
+        elif name == "confluence_remove_page_label":
+            client.remove_page_label(arguments["page_id"], arguments["label"])
+            result = f"Label '{arguments['label']}' removed from page {arguments['page_id']}"
+
+        # ========== Attachments ==========
+        elif name == "confluence_get_page_attachments":
+            attachments = client.get_page_attachments(arguments["page_id"], arguments.get("limit", 25))
+            output = [f"# Attachments ({len(attachments.get('results', []))} found)\n"]
+            for a in attachments.get('results', []):
+                output.append(f"- **{a.get('title', 'Unknown')}** (ID: {a.get('id')})")
+            result = '\n'.join(output)
+
+        # ========== History ==========
+        elif name == "confluence_get_page_history":
+            history = client.get_page_history(arguments["page_id"])
+            output = ["# Page History"]
+            output.append(f"**Created:** {history.get('createdDate', 'Unknown')}")
+            if history.get('createdBy'):
+                output.append(f"**Created By:** {history['createdBy'].get('displayName', 'Unknown')}")
+            output.append(f"**Latest Version:** {history.get('lastUpdated', {}).get('number', 'Unknown')}")
+            result = '\n'.join(output)
+
+        else:
+            result = f"Unknown tool: {name}"
+
+        return [TextContent(type="text", text=result)]
+
+    except Exception as e:
+        error_msg = f"Error executing {name}: {str(e)}\n{traceback.format_exc()}"
+        return [TextContent(type="text", text=error_msg)]
+
+
+async def main():
+    """Run the MCP server."""
+    async with stdio_server() as (read_stream, write_stream):
+        await server.run(
+            read_stream,
+            write_stream,
+            server.create_initialization_options()
+        )
+
+
+if __name__ == "__main__":
+    import asyncio
+    asyncio.run(main())
