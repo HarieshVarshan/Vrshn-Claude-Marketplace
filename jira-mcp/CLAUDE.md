@@ -134,6 +134,17 @@ JIRA_TOKEN=your-api-token
 | `jira_get_all_statuses` | Get all statuses |
 | `jira_get_all_resolutions` | Get all resolutions |
 
+### Raw API (Fallback)
+| Tool | Description |
+|------|-------------|
+| `jira_raw_api` | Make arbitrary API calls for operations not covered by other tools |
+
+**Usage:**
+```python
+jira_raw_api(method="GET", endpoint="/rest/api/2/field")
+jira_raw_api(method="POST", endpoint="/rest/api/2/issue", body={"fields": {...}})
+```
+
 ## JQL Quick Reference
 
 ```jql

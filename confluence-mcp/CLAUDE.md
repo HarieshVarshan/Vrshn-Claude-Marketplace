@@ -62,6 +62,17 @@ CONFLUENCE_TOKEN=your-api-token
 |------|-------------|
 | `confluence_get_page_history` | Get version history |
 
+### Raw API (Fallback)
+| Tool | Description |
+|------|-------------|
+| `confluence_raw_api` | Make arbitrary API calls for operations not covered by other tools |
+
+**Usage:**
+```python
+confluence_raw_api(method="GET", endpoint="/rest/api/content/123456")
+confluence_raw_api(method="POST", endpoint="/rest/api/content", body={"type": "page", ...})
+```
+
 ## CQL Quick Reference
 
 ```cql

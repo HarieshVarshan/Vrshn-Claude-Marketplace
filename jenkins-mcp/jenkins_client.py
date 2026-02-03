@@ -320,6 +320,47 @@ class JenkinsClient:
         response.raise_for_status()
         return response.json()
 
+    # ==================== Raw API ====================
+
+    def raw_api(self, method: str, endpoint: str,
+                body: Dict[str, Any] = None,
+                params: Dict[str, Any] = None) -> Dict[str, Any]:
+        """
+        Make a raw API call to Jenkins.
+
+        Args:
+            method: HTTP method (GET, POST, PUT, DELETE)
+            endpoint: API endpoint (e.g., '/job/my-job/api/json')
+            body: Request body for POST/PUT requests
+            params: Query parameters
+
+        Returns:
+            Response JSON or {'status': 'success'} for no-content responses
+        """
+        url = f"{self.base_url}{endpoint}"
+        method = method.upper()
+
+        if method == 'GET':
+            response = self.session.get(url, params=params)
+        elif method == 'POST':
+            response = self.session.post(url, json=body, params=params)
+        elif method == 'PUT':
+            response = self.session.put(url, json=body, params=params)
+        elif method == 'DELETE':
+            response = self.session.delete(url, params=params)
+        else:
+            raise ValueError(f"Unsupported HTTP method: {method}")
+
+        response.raise_for_status()
+
+        if response.status_code == 204 or not response.content:
+            return {'status': 'success', 'status_code': response.status_code}
+
+        try:
+            return response.json()
+        except ValueError:
+            return {'status': 'success', 'content': response.text}
+
 
 # Singleton instances
 _config: Optional[JenkinsConfig] = None

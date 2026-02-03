@@ -66,6 +66,17 @@ BITBUCKET_TOKEN=your-api-token
 | `bitbucket_get_all_projects` | List all projects |
 | `bitbucket_get_project` | Get project details |
 
+### Raw API (Fallback)
+| Tool | Description |
+|------|-------------|
+| `bitbucket_raw_api` | Make arbitrary API calls for operations not covered by other tools |
+
+**Usage:**
+```python
+bitbucket_raw_api(method="GET", endpoint="/rest/api/1.0/projects/PROJ/repos")
+bitbucket_raw_api(method="POST", endpoint="/rest/api/1.0/projects", body={"key": "NEW", ...})
+```
+
 ## URL Parsing
 
 The tools automatically parse URLs:

@@ -56,6 +56,17 @@ JENKINS_EPSW_TOKEN=api-token
 | `jenkins_get_queue` | Get pending builds queue |
 | `jenkins_get_nodes` | Get build agent status |
 
+### Raw API (Fallback)
+| Tool | Description |
+|------|-------------|
+| `jenkins_raw_api` | Make arbitrary API calls for operations not covered by other tools |
+
+**Usage:**
+```python
+jenkins_raw_api(method="GET", endpoint="/job/my-job/api/json")
+jenkins_raw_api(method="POST", endpoint="/job/my-job/build", server="proc")
+```
+
 **Note:** All Jenkins tools accept an optional `server` parameter to specify which Jenkins server to use. If not specified, the first configured server is used.
 
 ## Key Files

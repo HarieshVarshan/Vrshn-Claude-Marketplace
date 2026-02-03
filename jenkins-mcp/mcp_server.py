@@ -380,6 +380,23 @@ async def list_tools() -> list[Tool]:
                 "required": ["job_name"]
             }
         ),
+
+        # ========== Raw API ==========
+        Tool(
+            name="jenkins_raw_api",
+            description="Make a raw API call to Jenkins. Use this for operations not covered by other tools.",
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "method": {"type": "string", "description": "HTTP method (GET, POST, PUT, DELETE)"},
+                    "endpoint": {"type": "string", "description": "API endpoint (e.g., '/job/my-job/api/json')"},
+                    "body": {"type": "object", "description": "Request body for POST/PUT requests"},
+                    "params": {"type": "object", "description": "Query parameters"},
+                    "server": {"type": "string", "description": "Jenkins server name (optional)"}
+                },
+                "required": ["method", "endpoint"]
+            }
+        ),
     ]
 
 
@@ -442,6 +459,18 @@ async def call_tool(name: str, arguments: dict[str, Any]) -> list[TextContent]:
             else:
                 config = client.get_job_config_parsed(arguments["job_name"])
                 result = format_job_config(config, arguments["job_name"])
+
+        # ========== Raw API ==========
+        elif name == "jenkins_raw_api":
+            client = get_jenkins_client(arguments.get("server"))
+            response = client.raw_api(
+                method=arguments["method"],
+                endpoint=arguments["endpoint"],
+                body=arguments.get("body"),
+                params=arguments.get("params")
+            )
+            import json
+            result = f"# Raw API Response\n\n```json\n{json.dumps(response, indent=2)}\n```"
 
         else:
             result = f"Unknown tool: {name}"

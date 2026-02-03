@@ -286,6 +286,22 @@ async def list_tools() -> list[Tool]:
                 "required": ["page_id"]
             }
         ),
+
+        # ========== Raw API ==========
+        Tool(
+            name="confluence_raw_api",
+            description="Make a raw API call to Confluence. Use this for operations not covered by other tools.",
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "method": {"type": "string", "description": "HTTP method (GET, POST, PUT, DELETE)"},
+                    "endpoint": {"type": "string", "description": "API endpoint (e.g., '/rest/api/content/123456')"},
+                    "body": {"type": "object", "description": "Request body for POST/PUT requests"},
+                    "params": {"type": "object", "description": "Query parameters"}
+                },
+                "required": ["method", "endpoint"]
+            }
+        ),
     ]
 
 
@@ -423,6 +439,17 @@ async def call_tool(name: str, arguments: dict[str, Any]) -> list[TextContent]:
                 output.append(f"**Created By:** {history['createdBy'].get('displayName', 'Unknown')}")
             output.append(f"**Latest Version:** {history.get('lastUpdated', {}).get('number', 'Unknown')}")
             result = '\n'.join(output)
+
+        # ========== Raw API ==========
+        elif name == "confluence_raw_api":
+            response = client.raw_api(
+                method=arguments["method"],
+                endpoint=arguments["endpoint"],
+                body=arguments.get("body"),
+                params=arguments.get("params")
+            )
+            import json
+            result = f"# Raw API Response\n\n```json\n{json.dumps(response, indent=2)}\n```"
 
         else:
             result = f"Unknown tool: {name}"
