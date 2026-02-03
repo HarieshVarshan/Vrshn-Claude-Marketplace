@@ -311,7 +311,84 @@ class JenkinsClient:
 
         return config
 
-    # ==================== Server Info ====================
+    # ==================== Build Details ====================
+
+    def list_builds(self, job_name: str, limit: int = 25) -> List[Dict[str, Any]]:
+        """List builds for a job."""
+        job_path = self._get_job_path(job_name)
+        url = f"{self.base_url}/job/{job_path}/api/json"
+        params = {
+            "tree": f"builds[number,result,timestamp,duration,building]{{0,{limit}}}"
+        }
+        response = self.session.get(url, params=params)
+        response.raise_for_status()
+        return response.json().get('builds', [])
+
+    def get_build_test_results(self, job_name: str, build_number: int) -> Dict[str, Any]:
+        """Get test results for a build."""
+        job_path = self._get_job_path(job_name)
+        url = f"{self.base_url}/job/{job_path}/{build_number}/testReport/api/json"
+        response = self.session.get(url)
+        response.raise_for_status()
+        return response.json()
+
+    def get_build_artifacts(self, job_name: str, build_number: int) -> List[Dict[str, Any]]:
+        """List artifacts from a build."""
+        job_path = self._get_job_path(job_name)
+        url = f"{self.base_url}/job/{job_path}/{build_number}/api/json"
+        params = {"tree": "artifacts[fileName,relativePath,displayPath]"}
+        response = self.session.get(url, params=params)
+        response.raise_for_status()
+        return response.json().get('artifacts', [])
+
+    def download_artifact(self, job_name: str, build_number: int,
+                          artifact_path: str, download_path: str) -> str:
+        """Download an artifact from a build."""
+        job_path = self._get_job_path(job_name)
+        url = f"{self.base_url}/job/{job_path}/{build_number}/artifact/{artifact_path}"
+        response = self.session.get(url, stream=True)
+        response.raise_for_status()
+
+        with open(download_path, 'wb') as f:
+            for chunk in response.iter_content(chunk_size=8192):
+                f.write(chunk)
+
+        return download_path
+
+    # ==================== Views ====================
+
+    def list_views(self) -> List[Dict[str, Any]]:
+        """List all views."""
+        url = f"{self.base_url}/api/json"
+        params = {"tree": "views[name,url,description]"}
+        response = self.session.get(url, params=params)
+        response.raise_for_status()
+        return response.json().get('views', [])
+
+    def get_view(self, view_name: str) -> Dict[str, Any]:
+        """Get jobs in a specific view."""
+        url = f"{self.base_url}/view/{view_name}/api/json"
+        params = {"tree": "name,description,jobs[name,color,url,lastBuild[number,result]]"}
+        response = self.session.get(url, params=params)
+        response.raise_for_status()
+        return response.json()
+
+    # ==================== Nodes ====================
+
+    def get_node_details(self, node_name: str) -> Dict[str, Any]:
+        """Get detailed info about a specific node."""
+        # Master node has special path
+        if node_name.lower() in ('master', 'built-in node', '(master)'):
+            node_path = "(master)"
+        else:
+            node_path = node_name
+
+        url = f"{self.base_url}/computer/{node_path}/api/json"
+        response = self.session.get(url)
+        response.raise_for_status()
+        return response.json()
+
+    # ==================== System Info ====================
 
     def get_server_info(self) -> Dict[str, Any]:
         """Get Jenkins server information."""
@@ -319,6 +396,131 @@ class JenkinsClient:
         response = self.session.get(url)
         response.raise_for_status()
         return response.json()
+
+    def get_system_info(self) -> Dict[str, Any]:
+        """Get Jenkins system information including version."""
+        # Get version from response headers
+        url = f"{self.base_url}/api/json"
+        response = self.session.get(url)
+        response.raise_for_status()
+
+        info = response.json()
+        info['jenkinsVersion'] = response.headers.get('X-Jenkins', 'Unknown')
+        return info
+
+    def get_plugins(self) -> List[Dict[str, Any]]:
+        """List installed plugins."""
+        url = f"{self.base_url}/pluginManager/api/json"
+        params = {"tree": "plugins[shortName,longName,version,active,enabled,hasUpdate]",
+                  "depth": 1}
+        response = self.session.get(url, params=params)
+        response.raise_for_status()
+        return response.json().get('plugins', [])
+
+    def get_credentials_list(self, domain: str = "_") -> List[Dict[str, Any]]:
+        """List credential IDs (metadata only, not secrets)."""
+        url = f"{self.base_url}/credentials/store/system/domain/{domain}/api/json"
+        params = {"tree": "credentials[id,displayName,description,typeName]"}
+        response = self.session.get(url, params=params)
+        response.raise_for_status()
+        return response.json().get('credentials', [])
+
+    # ==================== Build Operations (Write) ====================
+
+    def trigger_build(self, job_name: str, parameters: Dict[str, Any] = None) -> Dict[str, Any]:
+        """Trigger a build for a job."""
+        job_path = self._get_job_path(job_name)
+
+        if parameters:
+            url = f"{self.base_url}/job/{job_path}/buildWithParameters"
+            response = self.session.post(url, params=parameters)
+        else:
+            url = f"{self.base_url}/job/{job_path}/build"
+            response = self.session.post(url)
+
+        response.raise_for_status()
+
+        # Get queue item URL from Location header
+        queue_url = response.headers.get('Location', '')
+        return {
+            'status': 'triggered',
+            'queue_url': queue_url,
+            'queue_item': queue_url.split('/')[-2] if queue_url else None
+        }
+
+    def stop_build(self, job_name: str, build_number: int) -> Dict[str, Any]:
+        """Stop/abort a running build."""
+        job_path = self._get_job_path(job_name)
+        url = f"{self.base_url}/job/{job_path}/{build_number}/stop"
+        response = self.session.post(url)
+        response.raise_for_status()
+        return {'status': 'stopped', 'job': job_name, 'build': build_number}
+
+    # ==================== Job Operations (Write) ====================
+
+    def enable_job(self, job_name: str) -> Dict[str, Any]:
+        """Enable a disabled job."""
+        job_path = self._get_job_path(job_name)
+        url = f"{self.base_url}/job/{job_path}/enable"
+        response = self.session.post(url)
+        response.raise_for_status()
+        return {'status': 'enabled', 'job': job_name}
+
+    def disable_job(self, job_name: str) -> Dict[str, Any]:
+        """Disable a job."""
+        job_path = self._get_job_path(job_name)
+        url = f"{self.base_url}/job/{job_path}/disable"
+        response = self.session.post(url)
+        response.raise_for_status()
+        return {'status': 'disabled', 'job': job_name}
+
+    def delete_job(self, job_name: str) -> Dict[str, Any]:
+        """Delete a job."""
+        job_path = self._get_job_path(job_name)
+        url = f"{self.base_url}/job/{job_path}/doDelete"
+        response = self.session.post(url)
+        response.raise_for_status()
+        return {'status': 'deleted', 'job': job_name}
+
+    def create_job(self, job_name: str, config_xml: str, folder: str = None) -> Dict[str, Any]:
+        """Create a new job from XML config."""
+        if folder:
+            folder_path = self._get_job_path(folder)
+            url = f"{self.base_url}/job/{folder_path}/createItem"
+        else:
+            url = f"{self.base_url}/createItem"
+
+        headers = {'Content-Type': 'application/xml'}
+        params = {'name': job_name}
+        response = self.session.post(url, data=config_xml, headers=headers, params=params)
+        response.raise_for_status()
+        return {'status': 'created', 'job': job_name}
+
+    def copy_job(self, source_job: str, new_job_name: str, folder: str = None) -> Dict[str, Any]:
+        """Copy an existing job."""
+        if folder:
+            folder_path = self._get_job_path(folder)
+            url = f"{self.base_url}/job/{folder_path}/createItem"
+        else:
+            url = f"{self.base_url}/createItem"
+
+        params = {
+            'name': new_job_name,
+            'mode': 'copy',
+            'from': source_job
+        }
+        response = self.session.post(url, params=params)
+        response.raise_for_status()
+        return {'status': 'copied', 'source': source_job, 'new_job': new_job_name}
+
+    def update_job_config(self, job_name: str, config_xml: str) -> Dict[str, Any]:
+        """Update job configuration."""
+        job_path = self._get_job_path(job_name)
+        url = f"{self.base_url}/job/{job_path}/config.xml"
+        headers = {'Content-Type': 'application/xml'}
+        response = self.session.post(url, data=config_xml, headers=headers)
+        response.raise_for_status()
+        return {'status': 'updated', 'job': job_name}
 
     # ==================== Raw API ====================
 

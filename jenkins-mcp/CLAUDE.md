@@ -2,7 +2,7 @@
 
 ## Overview
 
-MCP server for Jenkins Server via REST API (read-only operations). Supports multiple Jenkins server configurations.
+MCP server for Jenkins Server via REST API. Supports multiple Jenkins server configurations.
 
 ## Configuration
 
@@ -48,13 +48,48 @@ JENKINS_EPSW_TOKEN=api-token
 | Tool | Description |
 |------|-------------|
 | `jenkins_get_build` | Get specific build information |
+| `jenkins_get_last_build` | Get the most recent build for a job |
+| `jenkins_list_builds` | List builds for a job with summary |
 | `jenkins_get_build_log` | Get build console output |
+| `jenkins_get_build_test_results` | Get test results (JUnit) for a build |
+| `jenkins_get_build_artifacts` | List artifacts from a build |
+| `jenkins_download_artifact` | Download an artifact from a build |
+
+### Views
+| Tool | Description |
+|------|-------------|
+| `jenkins_list_views` | List all Jenkins views |
+| `jenkins_get_view` | Get jobs in a specific view |
 
 ### Infrastructure
 | Tool | Description |
 |------|-------------|
 | `jenkins_get_queue` | Get pending builds queue |
 | `jenkins_get_nodes` | Get build agent status |
+| `jenkins_get_node_details` | Get detailed info about a specific node |
+
+### System Info
+| Tool | Description |
+|------|-------------|
+| `jenkins_get_system_info` | Get Jenkins version and system details |
+| `jenkins_get_plugins` | List installed plugins |
+| `jenkins_get_credentials_list` | List credential IDs (metadata only, not secrets) |
+
+### Build Operations (Write)
+| Tool | Description |
+|------|-------------|
+| `jenkins_trigger_build` | Start a build (with optional parameters) |
+| `jenkins_stop_build` | Abort a running build |
+
+### Job Operations (Write)
+| Tool | Description |
+|------|-------------|
+| `jenkins_enable_job` | Enable a disabled job |
+| `jenkins_disable_job` | Disable a job |
+| `jenkins_create_job` | Create a new job from XML config |
+| `jenkins_copy_job` | Copy an existing job |
+| `jenkins_delete_job` | Delete a job |
+| `jenkins_update_job_config` | Update job XML configuration |
 
 ### Raw API (Fallback)
 | Tool | Description |

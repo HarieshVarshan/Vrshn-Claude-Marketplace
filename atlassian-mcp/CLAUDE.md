@@ -54,17 +54,36 @@ This MCP server provides tools for interacting with Jira, Confluence, Bitbucket,
 | `bitbucket_get_file` | Get file from repo |
 | `bitbucket_list_branches` | List branches |
 
-### Jenkins (Read-Only)
+### Jenkins
 | Tool | Description |
 |------|-------------|
 | `jenkins_list_servers` | List available configured Jenkins servers |
 | `jenkins_get_job` | Get job details and status |
-| `jenkins_get_build` | Get specific build information |
 | `jenkins_list_jobs` | List all jobs (optionally in a folder) |
+| `jenkins_get_job_config` | Get job configuration (SCM, triggers, parameters, build steps) |
+| `jenkins_get_build` | Get specific build information |
+| `jenkins_get_last_build` | Get the most recent build for a job |
+| `jenkins_list_builds` | List builds for a job with summary |
 | `jenkins_get_build_log` | Get build console output |
+| `jenkins_get_build_test_results` | Get test results (JUnit) for a build |
+| `jenkins_get_build_artifacts` | List artifacts from a build |
+| `jenkins_download_artifact` | Download an artifact from a build |
+| `jenkins_list_views` | List all Jenkins views |
+| `jenkins_get_view` | Get jobs in a specific view |
 | `jenkins_get_queue` | Get pending builds queue |
 | `jenkins_get_nodes` | Get build agent status |
-| `jenkins_get_job_config` | Get job configuration (SCM, triggers, parameters, build steps) |
+| `jenkins_get_node_details` | Get detailed info about a specific node |
+| `jenkins_get_system_info` | Get Jenkins version and system details |
+| `jenkins_get_plugins` | List installed plugins |
+| `jenkins_get_credentials_list` | List credential IDs (metadata only) |
+| `jenkins_trigger_build` | Start a build (with optional parameters) |
+| `jenkins_stop_build` | Abort a running build |
+| `jenkins_enable_job` | Enable a disabled job |
+| `jenkins_disable_job` | Disable a job |
+| `jenkins_create_job` | Create a new job from XML config |
+| `jenkins_copy_job` | Copy an existing job |
+| `jenkins_delete_job` | Delete a job |
+| `jenkins_update_job_config` | Update job XML configuration |
 
 **Note:** All Jenkins tools accept an optional `server` parameter to specify which Jenkins server to use (e.g., `server: "proc"` or `server: "epsw"`). If not specified, the first configured server is used.
 

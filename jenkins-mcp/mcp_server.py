@@ -381,6 +381,256 @@ async def list_tools() -> list[Tool]:
             }
         ),
 
+        # ========== Build Details ==========
+        Tool(
+            name="jenkins_get_last_build",
+            description="Get the most recent build for a job.",
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "job_name": {"type": "string", "description": "Job name"},
+                    "server": {"type": "string", "description": "Jenkins server name (optional)"}
+                },
+                "required": ["job_name"]
+            }
+        ),
+        Tool(
+            name="jenkins_list_builds",
+            description="List builds for a job with summary.",
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "job_name": {"type": "string", "description": "Job name"},
+                    "limit": {"type": "integer", "description": "Max builds to return", "default": 25},
+                    "server": {"type": "string", "description": "Jenkins server name (optional)"}
+                },
+                "required": ["job_name"]
+            }
+        ),
+        Tool(
+            name="jenkins_get_build_test_results",
+            description="Get test results (JUnit) for a build.",
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "job_name": {"type": "string", "description": "Job name"},
+                    "build_number": {"type": "integer", "description": "Build number"},
+                    "server": {"type": "string", "description": "Jenkins server name (optional)"}
+                },
+                "required": ["job_name", "build_number"]
+            }
+        ),
+        Tool(
+            name="jenkins_get_build_artifacts",
+            description="List artifacts from a build.",
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "job_name": {"type": "string", "description": "Job name"},
+                    "build_number": {"type": "integer", "description": "Build number"},
+                    "server": {"type": "string", "description": "Jenkins server name (optional)"}
+                },
+                "required": ["job_name", "build_number"]
+            }
+        ),
+        Tool(
+            name="jenkins_download_artifact",
+            description="Download an artifact from a build.",
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "job_name": {"type": "string", "description": "Job name"},
+                    "build_number": {"type": "integer", "description": "Build number"},
+                    "artifact_path": {"type": "string", "description": "Relative path of artifact"},
+                    "download_path": {"type": "string", "description": "Local path to save file"},
+                    "server": {"type": "string", "description": "Jenkins server name (optional)"}
+                },
+                "required": ["job_name", "build_number", "artifact_path", "download_path"]
+            }
+        ),
+
+        # ========== Views ==========
+        Tool(
+            name="jenkins_list_views",
+            description="List all Jenkins views.",
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "server": {"type": "string", "description": "Jenkins server name (optional)"}
+                },
+                "required": []
+            }
+        ),
+        Tool(
+            name="jenkins_get_view",
+            description="Get jobs in a specific view.",
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "view_name": {"type": "string", "description": "View name"},
+                    "server": {"type": "string", "description": "Jenkins server name (optional)"}
+                },
+                "required": ["view_name"]
+            }
+        ),
+
+        # ========== Node Details ==========
+        Tool(
+            name="jenkins_get_node_details",
+            description="Get detailed info about a specific node/agent.",
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "node_name": {"type": "string", "description": "Node name (use 'master' for built-in node)"},
+                    "server": {"type": "string", "description": "Jenkins server name (optional)"}
+                },
+                "required": ["node_name"]
+            }
+        ),
+
+        # ========== System Info ==========
+        Tool(
+            name="jenkins_get_system_info",
+            description="Get Jenkins system information (version, mode, etc.).",
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "server": {"type": "string", "description": "Jenkins server name (optional)"}
+                },
+                "required": []
+            }
+        ),
+        Tool(
+            name="jenkins_get_plugins",
+            description="List installed Jenkins plugins.",
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "server": {"type": "string", "description": "Jenkins server name (optional)"}
+                },
+                "required": []
+            }
+        ),
+        Tool(
+            name="jenkins_get_credentials_list",
+            description="List credential IDs (metadata only, not secrets).",
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "domain": {"type": "string", "description": "Credential domain", "default": "_"},
+                    "server": {"type": "string", "description": "Jenkins server name (optional)"}
+                },
+                "required": []
+            }
+        ),
+
+        # ========== Build Operations (Write) ==========
+        Tool(
+            name="jenkins_trigger_build",
+            description="Trigger a build for a job (with optional parameters).",
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "job_name": {"type": "string", "description": "Job name"},
+                    "parameters": {"type": "object", "description": "Build parameters as key-value pairs"},
+                    "server": {"type": "string", "description": "Jenkins server name (optional)"}
+                },
+                "required": ["job_name"]
+            }
+        ),
+        Tool(
+            name="jenkins_stop_build",
+            description="Stop/abort a running build.",
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "job_name": {"type": "string", "description": "Job name"},
+                    "build_number": {"type": "integer", "description": "Build number to stop"},
+                    "server": {"type": "string", "description": "Jenkins server name (optional)"}
+                },
+                "required": ["job_name", "build_number"]
+            }
+        ),
+
+        # ========== Job Operations (Write) ==========
+        Tool(
+            name="jenkins_enable_job",
+            description="Enable a disabled job.",
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "job_name": {"type": "string", "description": "Job name"},
+                    "server": {"type": "string", "description": "Jenkins server name (optional)"}
+                },
+                "required": ["job_name"]
+            }
+        ),
+        Tool(
+            name="jenkins_disable_job",
+            description="Disable a job.",
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "job_name": {"type": "string", "description": "Job name"},
+                    "server": {"type": "string", "description": "Jenkins server name (optional)"}
+                },
+                "required": ["job_name"]
+            }
+        ),
+        Tool(
+            name="jenkins_delete_job",
+            description="Delete a job.",
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "job_name": {"type": "string", "description": "Job name"},
+                    "server": {"type": "string", "description": "Jenkins server name (optional)"}
+                },
+                "required": ["job_name"]
+            }
+        ),
+        Tool(
+            name="jenkins_create_job",
+            description="Create a new job from XML config.",
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "job_name": {"type": "string", "description": "Name for the new job"},
+                    "config_xml": {"type": "string", "description": "Job XML configuration"},
+                    "folder": {"type": "string", "description": "Folder to create job in (optional)"},
+                    "server": {"type": "string", "description": "Jenkins server name (optional)"}
+                },
+                "required": ["job_name", "config_xml"]
+            }
+        ),
+        Tool(
+            name="jenkins_copy_job",
+            description="Copy an existing job.",
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "source_job": {"type": "string", "description": "Source job name"},
+                    "new_job_name": {"type": "string", "description": "Name for the new job"},
+                    "folder": {"type": "string", "description": "Folder to create job in (optional)"},
+                    "server": {"type": "string", "description": "Jenkins server name (optional)"}
+                },
+                "required": ["source_job", "new_job_name"]
+            }
+        ),
+        Tool(
+            name="jenkins_update_job_config",
+            description="Update job XML configuration.",
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "job_name": {"type": "string", "description": "Job name"},
+                    "config_xml": {"type": "string", "description": "New job XML configuration"},
+                    "server": {"type": "string", "description": "Jenkins server name (optional)"}
+                },
+                "required": ["job_name", "config_xml"]
+            }
+        ),
+
         # ========== Raw API ==========
         Tool(
             name="jenkins_raw_api",
@@ -459,6 +709,225 @@ async def call_tool(name: str, arguments: dict[str, Any]) -> list[TextContent]:
             else:
                 config = client.get_job_config_parsed(arguments["job_name"])
                 result = format_job_config(config, arguments["job_name"])
+
+        # ========== Build Details ==========
+        elif name == "jenkins_get_last_build":
+            client = get_jenkins_client(arguments.get("server"))
+            build = client.get_last_build(arguments["job_name"])
+            result = format_build(build)
+
+        elif name == "jenkins_list_builds":
+            client = get_jenkins_client(arguments.get("server"))
+            builds = client.list_builds(arguments["job_name"], arguments.get("limit", 25))
+            output = [f"# Builds for {arguments['job_name']}", ""]
+            result_emoji = {
+                'SUCCESS': '[OK]',
+                'FAILURE': '[FAIL]',
+                'UNSTABLE': '[WARN]',
+                'ABORTED': '[ABORT]',
+                None: '[...]',
+            }
+            for b in builds:
+                status = result_emoji.get(b.get('result'), '[?]')
+                building = ' (building)' if b.get('building') else ''
+                ts = ''
+                if b.get('timestamp'):
+                    ts = datetime.fromtimestamp(b['timestamp'] / 1000).strftime('%Y-%m-%d %H:%M')
+                output.append(f"- {status} **#{b.get('number')}** - {ts}{building}")
+            result = '\n'.join(output)
+
+        elif name == "jenkins_get_build_test_results":
+            client = get_jenkins_client(arguments.get("server"))
+            try:
+                test_report = client.get_build_test_results(arguments["job_name"], arguments["build_number"])
+                output = [f"# Test Results: {arguments['job_name']} #{arguments['build_number']}", ""]
+                output.append(f"**Total:** {test_report.get('totalCount', 0)}")
+                output.append(f"**Passed:** {test_report.get('passCount', 0)}")
+                output.append(f"**Failed:** {test_report.get('failCount', 0)}")
+                output.append(f"**Skipped:** {test_report.get('skipCount', 0)}")
+
+                failed_tests = test_report.get('suites', [])
+                failures = []
+                for suite in failed_tests:
+                    for case in suite.get('cases', []):
+                        if case.get('status') in ('FAILED', 'REGRESSION'):
+                            failures.append(f"- {case.get('className')}.{case.get('name')}")
+
+                if failures:
+                    output.append("")
+                    output.append("## Failed Tests")
+                    output.extend(failures[:20])
+                    if len(failures) > 20:
+                        output.append(f"... and {len(failures) - 20} more")
+
+                result = '\n'.join(output)
+            except Exception as e:
+                if '404' in str(e):
+                    result = "No test results found for this build."
+                else:
+                    raise
+
+        elif name == "jenkins_get_build_artifacts":
+            client = get_jenkins_client(arguments.get("server"))
+            artifacts = client.get_build_artifacts(arguments["job_name"], arguments["build_number"])
+            if artifacts:
+                output = [f"# Artifacts: {arguments['job_name']} #{arguments['build_number']}", ""]
+                for a in artifacts:
+                    output.append(f"- **{a.get('fileName')}** ({a.get('relativePath')})")
+                result = '\n'.join(output)
+            else:
+                result = "No artifacts found for this build."
+
+        elif name == "jenkins_download_artifact":
+            client = get_jenkins_client(arguments.get("server"))
+            saved_path = client.download_artifact(
+                arguments["job_name"],
+                arguments["build_number"],
+                arguments["artifact_path"],
+                arguments["download_path"]
+            )
+            result = f"Artifact downloaded to: {saved_path}"
+
+        # ========== Views ==========
+        elif name == "jenkins_list_views":
+            client = get_jenkins_client(arguments.get("server"))
+            views = client.list_views()
+            output = ["# Jenkins Views", ""]
+            for v in views:
+                desc = f" - {v.get('description')}" if v.get('description') else ""
+                output.append(f"- **{v.get('name')}**{desc}")
+            result = '\n'.join(output)
+
+        elif name == "jenkins_get_view":
+            client = get_jenkins_client(arguments.get("server"))
+            view = client.get_view(arguments["view_name"])
+            output = [f"# View: {view.get('name', arguments['view_name'])}", ""]
+            if view.get('description'):
+                output.append(f"**Description:** {view.get('description')}")
+                output.append("")
+            jobs = view.get('jobs', [])
+            output.append(f"## Jobs ({len(jobs)})")
+            result = '\n'.join(output) + '\n' + format_jobs(jobs)
+
+        # ========== Node Details ==========
+        elif name == "jenkins_get_node_details":
+            client = get_jenkins_client(arguments.get("server"))
+            node = client.get_node_details(arguments["node_name"])
+            output = [f"# Node: {node.get('displayName', arguments['node_name'])}", ""]
+            output.append(f"**Status:** {'OFFLINE' if node.get('offline') else 'ONLINE'}")
+            output.append(f"**Executors:** {node.get('numExecutors', 0)}")
+
+            if node.get('offlineCauseReason'):
+                output.append(f"**Offline Reason:** {node.get('offlineCauseReason')}")
+
+            if node.get('monitorData'):
+                output.append("")
+                output.append("## Monitor Data")
+                monitor = node.get('monitorData', {})
+                if monitor.get('hudson.node_monitors.DiskSpaceMonitor'):
+                    disk = monitor['hudson.node_monitors.DiskSpaceMonitor']
+                    if disk:
+                        size_gb = disk.get('size', 0) / (1024**3)
+                        output.append(f"- **Disk Space:** {size_gb:.1f} GB")
+                if monitor.get('hudson.node_monitors.ResponseTimeMonitor'):
+                    rt = monitor['hudson.node_monitors.ResponseTimeMonitor']
+                    if rt:
+                        output.append(f"- **Response Time:** {rt.get('average', 0)}ms")
+
+            result = '\n'.join(output)
+
+        # ========== System Info ==========
+        elif name == "jenkins_get_system_info":
+            client = get_jenkins_client(arguments.get("server"))
+            info = client.get_system_info()
+            output = ["# Jenkins System Info", ""]
+            output.append(f"**Version:** {info.get('jenkinsVersion', 'Unknown')}")
+            output.append(f"**Mode:** {info.get('mode', 'Unknown')}")
+            output.append(f"**URL:** {info.get('url', 'Unknown')}")
+            if info.get('useSecurity'):
+                output.append("**Security:** Enabled")
+            output.append(f"**Executors:** {info.get('numExecutors', 0)}")
+            result = '\n'.join(output)
+
+        elif name == "jenkins_get_plugins":
+            client = get_jenkins_client(arguments.get("server"))
+            plugins = client.get_plugins()
+            output = [f"# Installed Plugins ({len(plugins)})", ""]
+            for p in plugins:
+                status = "[ON]" if p.get('active') and p.get('enabled') else "[OFF]"
+                update = " (update available)" if p.get('hasUpdate') else ""
+                output.append(f"- {status} **{p.get('shortName')}** v{p.get('version')}{update}")
+            result = '\n'.join(output)
+
+        elif name == "jenkins_get_credentials_list":
+            client = get_jenkins_client(arguments.get("server"))
+            try:
+                creds = client.get_credentials_list(arguments.get("domain", "_"))
+                output = [f"# Credentials ({len(creds)})", ""]
+                for c in creds:
+                    output.append(f"- **{c.get('id')}** ({c.get('typeName', 'Unknown')})")
+                    if c.get('description'):
+                        output.append(f"  _{c.get('description')}_")
+                result = '\n'.join(output)
+            except Exception as e:
+                if '404' in str(e):
+                    result = "Credentials plugin may not be installed or accessible."
+                else:
+                    raise
+
+        # ========== Build Operations (Write) ==========
+        elif name == "jenkins_trigger_build":
+            client = get_jenkins_client(arguments.get("server"))
+            response = client.trigger_build(arguments["job_name"], arguments.get("parameters"))
+            output = [f"# Build Triggered: {arguments['job_name']}", ""]
+            output.append(f"**Status:** {response.get('status')}")
+            if response.get('queue_item'):
+                output.append(f"**Queue Item:** {response.get('queue_item')}")
+            result = '\n'.join(output)
+
+        elif name == "jenkins_stop_build":
+            client = get_jenkins_client(arguments.get("server"))
+            response = client.stop_build(arguments["job_name"], arguments["build_number"])
+            result = f"Build #{arguments['build_number']} of **{arguments['job_name']}** has been stopped."
+
+        # ========== Job Operations (Write) ==========
+        elif name == "jenkins_enable_job":
+            client = get_jenkins_client(arguments.get("server"))
+            client.enable_job(arguments["job_name"])
+            result = f"Job **{arguments['job_name']}** has been enabled."
+
+        elif name == "jenkins_disable_job":
+            client = get_jenkins_client(arguments.get("server"))
+            client.disable_job(arguments["job_name"])
+            result = f"Job **{arguments['job_name']}** has been disabled."
+
+        elif name == "jenkins_delete_job":
+            client = get_jenkins_client(arguments.get("server"))
+            client.delete_job(arguments["job_name"])
+            result = f"Job **{arguments['job_name']}** has been deleted."
+
+        elif name == "jenkins_create_job":
+            client = get_jenkins_client(arguments.get("server"))
+            client.create_job(
+                arguments["job_name"],
+                arguments["config_xml"],
+                arguments.get("folder")
+            )
+            result = f"Job **{arguments['job_name']}** has been created."
+
+        elif name == "jenkins_copy_job":
+            client = get_jenkins_client(arguments.get("server"))
+            client.copy_job(
+                arguments["source_job"],
+                arguments["new_job_name"],
+                arguments.get("folder")
+            )
+            result = f"Job **{arguments['source_job']}** has been copied to **{arguments['new_job_name']}**."
+
+        elif name == "jenkins_update_job_config":
+            client = get_jenkins_client(arguments.get("server"))
+            client.update_job_config(arguments["job_name"], arguments["config_xml"])
+            result = f"Job **{arguments['job_name']}** configuration has been updated."
 
         # ========== Raw API ==========
         elif name == "jenkins_raw_api":
