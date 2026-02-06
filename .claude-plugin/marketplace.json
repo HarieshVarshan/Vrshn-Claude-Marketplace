@@ -14,6 +14,31 @@
             "name": "talk2docs",
             "description": "Local document semantic search - index and search PDF, DOCX, XLSX, PPTX, and more using ChromaDB and Ollama embeddings",
             "source": "./talk2docs"
+        },
+        {
+            "name": "klocwork-mcp",
+            "description": "MCP server for Klocwork project management - list projects, search issues, manage modules and permissions",
+            "source": "./klocwork-mcp"
+        },
+        {
+            "name": "bitbucket-mcp",
+            "description": "MCP server for Bitbucket Server/Data Center - manage PRs, repos, branches, and permissions",
+            "source": "./bitbucket-mcp"
+        },
+        {
+            "name": "confluence-mcp",
+            "description": "MCP server for Confluence Data Center - manage pages, spaces, attachments, and search",
+            "source": "./confluence-mcp"
+        },
+        {
+            "name": "jenkins-mcp",
+            "description": "MCP server for Jenkins CI/CD - manage jobs, builds, nodes, and artifacts",
+            "source": "./jenkins-mcp"
+        },
+        {
+            "name": "jira-mcp",
+            "description": "MCP server for Jira Data Center - manage issues, projects, sprints, and workflows",
+            "source": "./jira-mcp"
         }
     ]
 }

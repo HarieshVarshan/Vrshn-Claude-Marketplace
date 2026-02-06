@@ -1,0 +1,10 @@
+{
+    "name": "confluence-mcp",
+    "description": "MCP server for Confluence Data Center - manage pages, spaces, attachments, and search",
+    "version": "1.0.0",
+    "author": {
+        "name": "Harieshvarshan",
+        "email": "harieshvarshan@example.com"
+    },
+    "mcpServers": "./mcp-servers.json"
+}

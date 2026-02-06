@@ -1,0 +1,10 @@
+{
+    "name": "jenkins-mcp",
+    "description": "MCP server for Jenkins CI/CD - manage jobs, builds, nodes, and artifacts",
+    "version": "1.0.0",
+    "author": {
+        "name": "Harieshvarshan",
+        "email": "harieshvarshan@example.com"
+    },
+    "mcpServers": "./mcp-servers.json"
+}

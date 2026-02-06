@@ -1,0 +1,12 @@
+{
+    "mcpServers": {
+        "confluence": {
+            "type": "stdio",
+            "command": "python",
+            "args": ["${CLAUDE_PLUGIN_ROOT}/mcp_server.py"],
+            "env": {
+                "CONFLUENCE_CONFIG": "${HOME}/.config/atlassian/.env"
+            }
+        }
+    }
+}

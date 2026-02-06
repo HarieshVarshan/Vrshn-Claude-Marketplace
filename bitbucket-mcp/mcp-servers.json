@@ -1,0 +1,12 @@
+{
+    "mcpServers": {
+        "bitbucket": {
+            "type": "stdio",
+            "command": "python",
+            "args": ["${CLAUDE_PLUGIN_ROOT}/mcp_server.py"],
+            "env": {
+                "BITBUCKET_CONFIG": "${HOME}/.config/atlassian/.env"
+            }
+        }
+    }
+}

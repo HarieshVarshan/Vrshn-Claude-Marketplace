@@ -1,0 +1,10 @@
+{
+    "name": "klocwork-mcp",
+    "description": "MCP server for Klocwork project management - list projects, search issues, manage modules and permissions",
+    "version": "1.0.0",
+    "author": {
+        "name": "Harieshvarshan",
+        "email": "harieshvarshan@example.com"
+    },
+    "mcpServers": "./mcp-servers.json"
+}
