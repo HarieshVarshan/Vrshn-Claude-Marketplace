@@ -98,6 +98,10 @@ python index.py --force ./docs
 python index.py ./docs -w 16              # 16 embedding workers
 python index.py ./docs -p 4               # 4 documents in parallel
 python index.py ./docs -p 4 -w 8          # Combined: 4 docs × 8 workers
+
+# Batched embedding (more efficient for large document sets)
+python index.py ./docs --batch            # Batch mode: embed every 5000 chunks
+python index.py ./docs -b -B 10000        # Custom batch size of 10000 chunks
 ```
 
 ### 4. Configure Claude Code
@@ -227,6 +231,8 @@ Indexing can be slow for large documents. Use these options to speed it up:
 |--------|-------------|---------|
 | `-w, --workers` | Parallel embedding requests per document | 8 |
 | `-p, --parallel` | Number of documents to process simultaneously | 1 |
+| `-b, --batch` | Enable batched embedding mode (accumulate chunks) | off |
+| `-B, --batch-size` | Number of chunks to accumulate before embedding | 5000 |
 
 ### Examples
 
@@ -243,6 +249,11 @@ python index.py ./docs -p 4
 # Maximum parallelism (4 docs × 8 workers = 32 concurrent requests)
 python index.py ./docs -p 4 -w 8
 
+# Batched embedding (efficient for large document sets)
+python index.py ./docs --batch            # Embed every 5000 chunks
+python index.py ./docs -b -B 10000        # Custom batch size
+python index.py ./docs -b -w 16           # Batch mode with more workers
+
 # Using environment variable
 OLLAMA_WORKERS=16 python index.py ./docs
 ```
@@ -254,6 +265,7 @@ OLLAMA_WORKERS=16 python index.py ./docs
 | Single large document (>10K chunks) | `-w 16` or higher |
 | Many small documents | `-p 4` with default workers |
 | Mixed documents | `-p 2 -w 8` |
+| Large document sets (100+ files) | `--batch` or `-b -B 10000` |
 | Limited CPU/RAM | `-w 4 -p 1` (reduce parallelism) |
 
 ### Performance Comparison
@@ -264,8 +276,19 @@ OLLAMA_WORKERS=16 python index.py ./docs
 | `-w 16` | 16 | Large single file |
 | `-p 4` | 32 (4 × 8) | Many files |
 | `-p 4 -w 4` | 16 | Memory constrained |
+| `--batch` | 8 (batched) | Large document sets |
+| `-b -w 16` | 16 (batched) | Optimal for 100+ files |
 
 **Note:** If Ollama starts timing out or your system becomes unresponsive, reduce the parallelism.
+
+### Batched Embedding Mode
+
+The `--batch` flag enables a more efficient embedding strategy for large document sets:
+
+- **Without batch mode**: Each document's chunks are embedded immediately after extraction
+- **With batch mode**: Chunks are accumulated across documents and embedded in batches of 5000 (configurable with `-B`)
+
+This reduces overhead when indexing many documents, as embedding is a costly operation. The batch is automatically flushed at the end of indexing.
 
 ## MCP Tools Exposed
 

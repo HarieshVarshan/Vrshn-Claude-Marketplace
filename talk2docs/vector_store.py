@@ -352,6 +352,228 @@ def check_ollama_connection(url: str = "http://localhost:11434") -> bool:
 PDFVectorStore = DocumentVectorStore
 
 
+class BatchedDocumentVectorStore:
+    """
+    Wrapper around DocumentVectorStore that batches embeddings.
+
+    Accumulates chunks and only embeds when the batch size threshold is reached.
+    This reduces the overhead of embedding small batches and is more efficient
+    for indexing large numbers of documents.
+    """
+
+    DEFAULT_BATCH_SIZE = 5000
+
+    def __init__(
+        self,
+        persist_dir: str = "./chroma_db",
+        model: str = "nomic-embed-text",
+        ollama_url: str = "http://localhost:11434",
+        batch_size: int = None
+    ):
+        """
+        Initialize the batched vector store.
+
+        Args:
+            persist_dir: Directory to persist ChromaDB data
+            model: Ollama embedding model name
+            ollama_url: Ollama API URL
+            batch_size: Number of chunks to accumulate before embedding (default: 5000)
+        """
+        self.store = DocumentVectorStore(persist_dir, model, ollama_url)
+        self.batch_size = batch_size or self.DEFAULT_BATCH_SIZE
+
+        # Accumulated chunks waiting to be embedded
+        self._pending_chunks: list[str] = []
+        self._pending_ids: list[str] = []
+        self._pending_metadatas: list[dict] = []
+        self._pending_doc_ids: set[str] = set()  # Track which docs have pending chunks
+
+        # Statistics
+        self._total_embedded = 0
+        self._flush_count = 0
+
+    def add_document(
+        self,
+        doc_id: str,
+        chunks: list[str],
+        metadata: dict = None,
+        show_progress: bool = True
+    ) -> tuple[int, float]:
+        """
+        Add document chunks to the pending batch.
+
+        Chunks are accumulated and only embedded when batch_size is reached.
+        Call flush() to embed any remaining chunks.
+
+        Args:
+            doc_id: Unique document identifier
+            chunks: List of text chunks
+            metadata: Optional metadata to attach to chunks
+            show_progress: Show progress during embedding (when batch is flushed)
+
+        Returns:
+            Tuple of (number of chunks queued, 0.0) - actual embedding time is in flush()
+        """
+        if not chunks:
+            return 0, 0.0
+
+        # Add chunks to pending batch
+        for i, chunk in enumerate(chunks):
+            chunk_id = f"{doc_id}_chunk_{i}"
+            chunk_meta = {"source": doc_id, "chunk_index": i, **(metadata or {})}
+
+            self._pending_chunks.append(chunk)
+            self._pending_ids.append(chunk_id)
+            self._pending_metadatas.append(chunk_meta)
+
+        self._pending_doc_ids.add(doc_id)
+        num_queued = len(chunks)
+
+        # Check if we should flush
+        if len(self._pending_chunks) >= self.batch_size:
+            self._flush_batch(show_progress=show_progress)
+
+        return num_queued, 0.0
+
+    def _flush_batch(self, show_progress: bool = True) -> tuple[int, float]:
+        """
+        Embed and store all pending chunks.
+
+        Returns:
+            Tuple of (number of chunks embedded, time taken)
+        """
+        if not self._pending_chunks:
+            return 0, 0.0
+
+        start_time = time.time()
+        num_chunks = len(self._pending_chunks)
+        self._flush_count += 1
+
+        print(f"\n  [Batch {self._flush_count}] Embedding {num_chunks} chunks...")
+
+        # Get embeddings for all pending chunks
+        embeddings = self.store._get_embeddings_parallel(
+            self._pending_chunks,
+            show_progress=show_progress
+        )
+
+        # Filter out failed embeddings
+        valid_data = [
+            (chunk, emb, chunk_id, meta)
+            for chunk, emb, chunk_id, meta in zip(
+                self._pending_chunks, embeddings, self._pending_ids, self._pending_metadatas
+            )
+            if emb is not None
+        ]
+
+        if not valid_data:
+            elapsed = time.time() - start_time
+            self._clear_pending()
+            return 0, elapsed
+
+        valid_chunks = [d[0] for d in valid_data]
+        valid_embeddings = [d[1] for d in valid_data]
+        valid_ids = [d[2] for d in valid_data]
+        valid_metadatas = [d[3] for d in valid_data]
+
+        # Store in ChromaDB (in batches to avoid limits)
+        CHROMA_BATCH_SIZE = 5000
+        total_items = len(valid_ids)
+
+        with _chroma_lock:
+            for batch_start in range(0, total_items, CHROMA_BATCH_SIZE):
+                batch_end = min(batch_start + CHROMA_BATCH_SIZE, total_items)
+                self.store.collection.add(
+                    ids=valid_ids[batch_start:batch_end],
+                    embeddings=valid_embeddings[batch_start:batch_end],
+                    documents=valid_chunks[batch_start:batch_end],
+                    metadatas=valid_metadatas[batch_start:batch_end]
+                )
+
+        elapsed = time.time() - start_time
+        self._total_embedded += len(valid_chunks)
+
+        print(f"  [Batch {self._flush_count}] Stored {len(valid_chunks)} chunks in {elapsed:.1f}s")
+
+        self._clear_pending()
+        return len(valid_chunks), elapsed
+
+    def _clear_pending(self):
+        """Clear all pending data."""
+        self._pending_chunks = []
+        self._pending_ids = []
+        self._pending_metadatas = []
+        self._pending_doc_ids = set()
+
+    def flush(self, show_progress: bool = True) -> tuple[int, float]:
+        """
+        Flush any remaining pending chunks.
+
+        Call this after all documents have been added to ensure
+        remaining chunks are embedded.
+
+        Returns:
+            Tuple of (number of chunks embedded, time taken)
+        """
+        return self._flush_batch(show_progress=show_progress)
+
+    def get_pending_count(self) -> int:
+        """Get the number of chunks waiting to be embedded."""
+        return len(self._pending_chunks)
+
+    def get_stats(self) -> dict:
+        """Get batching statistics."""
+        return {
+            "total_embedded": self._total_embedded,
+            "flush_count": self._flush_count,
+            "pending_chunks": len(self._pending_chunks),
+            "pending_documents": len(self._pending_doc_ids),
+            "batch_size": self.batch_size,
+            **self.store.get_stats()
+        }
+
+    # Delegate other methods to underlying store
+    def is_document_indexed(self, doc_id: str) -> bool:
+        """Check if a document is already indexed."""
+        # Also check pending chunks
+        if doc_id in self._pending_doc_ids:
+            return True
+        return self.store.is_document_indexed(doc_id)
+
+    def get_document_chunks(self, doc_id: str) -> list[dict]:
+        """Get all chunks for a specific document."""
+        return self.store.get_document_chunks(doc_id)
+
+    def remove_document(self, doc_id: str) -> int:
+        """Remove a document from the index."""
+        # Also remove from pending if present
+        if doc_id in self._pending_doc_ids:
+            new_pending = []
+            new_ids = []
+            new_metas = []
+            for chunk, chunk_id, meta in zip(
+                self._pending_chunks, self._pending_ids, self._pending_metadatas
+            ):
+                if meta["source"] != doc_id:
+                    new_pending.append(chunk)
+                    new_ids.append(chunk_id)
+                    new_metas.append(meta)
+            self._pending_chunks = new_pending
+            self._pending_ids = new_ids
+            self._pending_metadatas = new_metas
+            self._pending_doc_ids.discard(doc_id)
+
+        return self.store.remove_document(doc_id)
+
+    def list_documents(self) -> dict[str, int]:
+        """List all indexed documents with chunk counts."""
+        return self.store.list_documents()
+
+    def search(self, query: str, n_results: int = 5) -> list[dict]:
+        """Search for relevant chunks."""
+        return self.store.search(query, n_results)
+
+
 def check_model_available(model: str, url: str = "http://localhost:11434") -> bool:
     """Check if a specific model is available in Ollama."""
     try:

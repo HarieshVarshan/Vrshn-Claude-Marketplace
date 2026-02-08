@@ -24,7 +24,7 @@ from threading import Lock
 
 from document_extractor import extract_text, is_supported, get_supported_extensions, get_file_type
 from chunker import chunk_by_paragraphs
-from vector_store import DocumentVectorStore, check_ollama_connection, check_model_available
+from vector_store import DocumentVectorStore, BatchedDocumentVectorStore, check_ollama_connection, check_model_available
 
 # Lock for thread-safe printing
 print_lock = Lock()
@@ -41,7 +41,7 @@ def format_time(seconds: float) -> str:
 
 def index_file(
     file_path: str,
-    store: DocumentVectorStore,
+    store,  # DocumentVectorStore or BatchedDocumentVectorStore
     chunk_size: int = 500,
     force: bool = False,
     quiet: bool = False
@@ -153,7 +153,9 @@ def index(
     chunk_size: int = 500,
     force: bool = False,
     extensions: list[str] | None = None,
-    parallel_docs: int = 1
+    parallel_docs: int = 1,
+    batch_mode: bool = False,
+    batch_size: int = 5000
 ) -> dict:
     """
     Index files or directories to the vector store.
@@ -165,6 +167,8 @@ def index(
         force: Re-index existing documents
         extensions: Only index specific extensions (for directories)
         parallel_docs: Number of documents to process in parallel
+        batch_mode: Batch chunks and embed only after reaching batch_size (more efficient)
+        batch_size: Number of chunks to accumulate before embedding (default: 5000)
 
     Returns:
         Statistics dictionary
@@ -180,7 +184,12 @@ def index(
         print("Pull it with: ollama pull nomic-embed-text")
         sys.exit(1)
 
-    store = DocumentVectorStore(persist_dir)
+    # Use batched store for more efficient embedding when processing many documents
+    if batch_mode:
+        store = BatchedDocumentVectorStore(persist_dir, batch_size=batch_size)
+        print(f"Batched embedding mode: will embed every {batch_size} chunks")
+    else:
+        store = DocumentVectorStore(persist_dir)
 
     # Collect all files to index
     all_files = []
@@ -302,6 +311,17 @@ def index(
 
     overall_time = time.time() - overall_start
 
+    # Flush any remaining chunks in batched mode
+    if batch_mode and hasattr(store, 'flush'):
+        pending = store.get_pending_count()
+        if pending > 0:
+            print(f"\nFlushing final {pending} chunks...")
+            flushed, flush_time = store.flush()
+            stats["total_chunks"] += flushed
+            stats["total_time"] += flush_time
+
+    overall_time = time.time() - overall_start
+
     # Summary
     print("\n" + "=" * 50)
     print("Indexing Complete!")
@@ -310,6 +330,9 @@ def index(
     print(f"  Failed:  {stats['failed']} documents")
     print(f"  Time:    {format_time(overall_time)}")
     print(f"  Database: {persist_dir}")
+    if batch_mode:
+        batch_stats = store.get_stats()
+        print(f"  Batches: {batch_stats['flush_count']} embedding batches")
 
     return stats
 
@@ -336,6 +359,11 @@ Parallelism (for faster indexing):
   python index.py ./docs -w 16              # 16 embedding workers (default: 8)
   python index.py ./docs -p 4               # 4 documents in parallel
   python index.py ./docs -p 4 -w 4          # 4 docs × 4 workers = 16 total requests
+
+Batched embedding (more efficient for large document sets):
+  python index.py ./docs --batch            # Batch mode (embed every 5000 chunks)
+  python index.py ./docs -b -B 10000        # Custom batch size of 10000 chunks
+  python index.py ./docs -b -w 16           # Batch mode with 16 workers
 
 Environment variables:
   OLLAMA_WORKERS=16 python index.py ./docs  # Set default embedding workers
@@ -379,6 +407,17 @@ Environment variables:
         default=None,
         help="Number of embedding workers per document (default: 8, or OLLAMA_WORKERS env)"
     )
+    parser.add_argument(
+        "--batch", "-b",
+        action="store_true",
+        help="Enable batched embedding mode (accumulate chunks, embed in batches)"
+    )
+    parser.add_argument(
+        "--batch-size", "-B",
+        type=int,
+        default=5000,
+        help="Number of chunks to accumulate before embedding (default: 5000)"
+    )
 
     args = parser.parse_args()
 
@@ -392,7 +431,9 @@ Environment variables:
         chunk_size=args.chunk_size,
         force=args.force,
         extensions=args.ext,
-        parallel_docs=args.parallel
+        parallel_docs=args.parallel,
+        batch_mode=args.batch,
+        batch_size=args.batch_size
     )
 
 
