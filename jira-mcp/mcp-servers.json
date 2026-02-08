@@ -2,7 +2,7 @@
     "mcpServers": {
         "jira": {
             "type": "stdio",
-            "command": "python",
+            "command": "${HOME}/.local/share/jira-mcp/venv/bin/python",
             "args": ["${CLAUDE_PLUGIN_ROOT}/mcp_server.py"],
             "env": {
                 "JIRA_CONFIG": "${HOME}/.config/atlassian/.env"

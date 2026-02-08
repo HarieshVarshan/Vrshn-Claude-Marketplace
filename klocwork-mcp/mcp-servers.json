@@ -2,7 +2,7 @@
     "mcpServers": {
         "klocwork": {
             "type": "stdio",
-            "command": "python",
+            "command": "${HOME}/.local/share/klocwork-mcp/venv/bin/python",
             "args": ["${CLAUDE_PLUGIN_ROOT}/mcp_server.py"],
             "env": {
                 "KLOCWORK_CONFIG": "${HOME}/.config/atlassian/.env"
