@@ -1,0 +1,13 @@
+{
+    "mcpServers": {
+        "excalidraw": {
+            "type": "stdio",
+            "command": "node",
+            "args": ["${CLAUDE_PLUGIN_ROOT}/dist/index.js"],
+            "env": {
+                "EXPRESS_SERVER_URL": "http://localhost:3000",
+                "ENABLE_CANVAS_SYNC": "true"
+            }
+        }
+    }
+}

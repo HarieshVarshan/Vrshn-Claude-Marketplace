@@ -1,0 +1,10 @@
+{
+    "name": "mcp-excalidraw",
+    "description": "MCP server for Excalidraw - create, edit, and manage diagrams with a live canvas, 26 tools for element CRUD, layout, scene awareness, and file I/O",
+    "version": "1.0.0",
+    "author": {
+        "name": "Harieshvarshan",
+        "email": "harieshvarshan@example.com"
+    },
+    "mcpServers": "./mcp-servers.json"
+}
