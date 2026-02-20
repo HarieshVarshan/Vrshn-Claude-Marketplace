@@ -6,11 +6,6 @@
     },
     "plugins": [
         {
-            "name": "atlassian-mcp",
-            "description": "MCP server for Jira, Confluence, and Bitbucket integration - search, read, create, and manage issues, pages, and pull requests",
-            "source": "./atlassian-mcp"
-        },
-        {
             "name": "talk2docs",
             "description": "Local document semantic search - index and search PDF, DOCX, XLSX, PPTX, and more using ChromaDB and Ollama embeddings",
             "source": "./talk2docs"
