@@ -5,8 +5,11 @@ Supports multiple document formats: PDF, DOCX, XLSX, PPTX, ODT, TXT, MD, HTML, C
 
 import csv
 import io
+import logging
 from pathlib import Path
 from typing import Optional
+
+logger = logging.getLogger(__name__)
 
 # Supported file extensions
 SUPPORTED_EXTENSIONS = {
@@ -433,7 +436,7 @@ def extract_from_multiple(file_paths: list[str]) -> dict[str, str]:
         try:
             results[path] = extract_text(path)
         except Exception as e:
-            print(f"Error extracting {path}: {e}")
+            logger.error("Error extracting %s: %s", path, e)
             results[path] = ""
     return results
 

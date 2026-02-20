@@ -4,97 +4,98 @@ Index Management Script
 List, remove, and manage indexed documents.
 """
 
-import os
-import sys
 import argparse
+import logging
 
+from config import DEFAULT_PERSIST_DIR
 from vector_store import DocumentVectorStore
 
+logger = logging.getLogger(__name__)
 
-def list_documents(persist_dir: str = "./chroma_db"):
+
+def list_documents(persist_dir: str = DEFAULT_PERSIST_DIR):
     """List all indexed documents."""
     store = DocumentVectorStore(persist_dir)
     docs = store.list_documents()
 
     if not docs:
-        print("No documents indexed.")
+        logger.info("No documents indexed.")
         return
 
-    print(f"{'Document':<50} {'Chunks':<10}")
-    print("-" * 60)
+    logger.info("%-50s %-10s", "Document", "Chunks")
+    logger.info("-" * 60)
 
     for doc, count in sorted(docs.items()):
-        print(f"{doc:<50} {count:<10}")
+        logger.info("%-50s %-10d", doc, count)
 
     stats = store.get_stats()
-    print("-" * 60)
-    print(f"Total: {stats['total_documents']} documents, {stats['total_chunks']} chunks")
-    print(f"Database: {persist_dir}")
+    logger.info("-" * 60)
+    logger.info("Total: %d documents, %d chunks", stats.total_documents, stats.total_chunks)
+    logger.info("Database: %s", persist_dir)
 
 
-def remove_document(doc_name: str, persist_dir: str = "./chroma_db"):
+def remove_document(doc_name: str, persist_dir: str = DEFAULT_PERSIST_DIR):
     """Remove a document from the index."""
     store = DocumentVectorStore(persist_dir)
 
     if not store.is_document_indexed(doc_name):
-        print(f"'{doc_name}' not found in index")
+        logger.info("'%s' not found in index", doc_name)
         return False
 
     removed = store.remove_document(doc_name)
     return removed > 0
 
 
-def rename_document(old_name: str, new_name: str, persist_dir: str = "./chroma_db"):
+def rename_document(old_name: str, new_name: str, persist_dir: str = DEFAULT_PERSIST_DIR):
     """Rename a document in the index without re-embedding."""
     store = DocumentVectorStore(persist_dir)
     renamed = store.rename_document(old_name, new_name)
     return renamed > 0
 
 
-def search_index(query: str, persist_dir: str = "./chroma_db", n_results: int = 5):
+def search_index(query: str, persist_dir: str = DEFAULT_PERSIST_DIR, n_results: int = 5):
     """Search the index."""
     store = DocumentVectorStore(persist_dir)
 
     results = store.search(query, n_results)
 
     if not results:
-        print("No results found.")
+        logger.info("No results found.")
         return
 
-    print(f"Search results for: '{query}'\n")
-    print("=" * 70)
+    logger.info("Search results for: '%s'\n", query)
+    logger.info("=" * 70)
 
     for i, r in enumerate(results, 1):
-        print(f"\n[{i}] {r['source']} (score: {r['score']})")
-        print("-" * 70)
-        text = r['text']
-        # Truncate long results
+        logger.info("\n[%d] %s (score: %s)", i, r.source, r.score)
+        logger.info("-" * 70)
+        text = r.text
         if len(text) > 500:
             text = text[:500] + "..."
-        print(text)
+        logger.info(text)
 
-    print("\n" + "=" * 70)
+    logger.info("\n" + "=" * 70)
 
 
-def show_stats(persist_dir: str = "./chroma_db"):
+def show_stats(persist_dir: str = DEFAULT_PERSIST_DIR):
     """Show index statistics."""
     store = DocumentVectorStore(persist_dir)
     stats = store.get_stats()
 
-    print("Index Statistics")
-    print("-" * 30)
-    print(f"Documents: {stats['total_documents']}")
-    print(f"Chunks:    {stats['total_chunks']}")
-    print(f"Model:     {stats['model']}")
-    print(f"Database:  {stats['persist_dir']}")
+    logger.info("Index Statistics")
+    logger.info("-" * 30)
+    logger.info("Documents: %d", stats.total_documents)
+    logger.info("Chunks:    %d", stats.total_chunks)
+    logger.info("Model:     %s", stats.model)
+    logger.info("Database:  %s", stats.persist_dir)
 
 
-def clear_index(persist_dir: str = "./chroma_db", confirm: bool = False):
+def clear_index(persist_dir: str = DEFAULT_PERSIST_DIR, confirm: bool = False):
     """Clear all documents from the index."""
     if not confirm:
         response = input("Are you sure you want to clear all documents? (yes/no): ")
         if response.lower() != "yes":
-            print("Aborted.")
+            logger.info("Aborted.")
             return
 
     store = DocumentVectorStore(persist_dir)
@@ -103,17 +104,19 @@ def clear_index(persist_dir: str = "./chroma_db", confirm: bool = False):
     for doc_name in docs:
         store.remove_document(doc_name)
 
-    print(f"Cleared {len(docs)} documents from index.")
+    logger.info("Cleared %d documents from index.", len(docs))
 
 
 def main():
+    logging.basicConfig(level=logging.INFO, format="%(message)s")
+
     parser = argparse.ArgumentParser(
         description="Manage the document vector index"
     )
     parser.add_argument(
         "--db", "-d",
-        default="./chroma_db",
-        help="Vector database directory (default: ./chroma_db)"
+        default=DEFAULT_PERSIST_DIR,
+        help=f"Vector database directory (default: {DEFAULT_PERSIST_DIR})"
     )
 
     subparsers = parser.add_subparsers(dest="command", help="Command to run")

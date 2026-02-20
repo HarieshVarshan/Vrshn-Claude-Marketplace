@@ -1,0 +1,34 @@
+"""
+Centralized Configuration Constants
+All magic numbers and defaults in one place.
+"""
+
+# Ollama
+DEFAULT_OLLAMA_URL = "http://localhost:11434"
+DEFAULT_EMBEDDING_MODEL = "nomic-embed-text"
+DEFAULT_EMBEDDING_WORKERS = 8
+MAX_EMBEDDING_CHARS = 8000
+OLLAMA_REQUEST_TIMEOUT = 60
+OLLAMA_HEALTH_TIMEOUT = 5
+
+# ChromaDB
+DEFAULT_PERSIST_DIR = "./chroma_db"
+COLLECTION_NAME = "documents"
+CHROMA_BATCH_SIZE = 5000
+
+# Chunking
+DEFAULT_CHUNK_SIZE = 500
+DEFAULT_PARAGRAPH_CHUNK_SIZE = 1000
+DEFAULT_CHUNK_OVERLAP = 50
+
+# Search
+DEFAULT_SEARCH_RESULTS = 5
+MAX_SEARCH_RESULTS = 20
+
+# Retry
+EMBEDDING_MAX_RETRIES = 3
+EMBEDDING_RETRY_BASE_WAIT = 1.0
+
+# TiParse (optional)
+TIPARSE_SUPPORTED_EXTENSIONS = {'.pdf', '.html', '.htm', '.txt', '.md'}
+TIPARSE_DEFAULT_CHUNK_SIZE = 2000

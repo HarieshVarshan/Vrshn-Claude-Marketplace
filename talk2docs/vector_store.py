@@ -4,16 +4,31 @@ ChromaDB wrapper with Ollama embeddings for storing and searching document chunk
 """
 
 import chromadb
+import logging
 import os
 import requests
 import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
-from pathlib import Path
 from threading import Lock
 from tqdm import tqdm
 
-# Default parallel workers for embedding requests
-DEFAULT_EMBEDDING_WORKERS = 8
+from config import (
+    DEFAULT_OLLAMA_URL,
+    DEFAULT_EMBEDDING_MODEL,
+    DEFAULT_EMBEDDING_WORKERS,
+    DEFAULT_PERSIST_DIR,
+    COLLECTION_NAME,
+    CHROMA_BATCH_SIZE,
+    MAX_EMBEDDING_CHARS,
+    OLLAMA_REQUEST_TIMEOUT,
+    OLLAMA_HEALTH_TIMEOUT,
+    DEFAULT_SEARCH_RESULTS,
+    EMBEDDING_MAX_RETRIES,
+    EMBEDDING_RETRY_BASE_WAIT,
+)
+from models import SearchResult, IndexStats
+
+logger = logging.getLogger(__name__)
 
 
 def get_embedding_workers() -> int:
@@ -29,9 +44,9 @@ class DocumentVectorStore:
 
     def __init__(
         self,
-        persist_dir: str = "./chroma_db",
-        model: str = "nomic-embed-text",
-        ollama_url: str = "http://localhost:11434"
+        persist_dir: str = DEFAULT_PERSIST_DIR,
+        model: str = DEFAULT_EMBEDDING_MODEL,
+        ollama_url: str = DEFAULT_OLLAMA_URL
     ):
         """
         Initialize the vector store.
@@ -48,29 +63,40 @@ class DocumentVectorStore:
         # Initialize ChromaDB
         self.client = chromadb.PersistentClient(path=persist_dir)
         self.collection = self.client.get_or_create_collection(
-            name="documents",
+            name=COLLECTION_NAME,
             metadata={"hnsw:space": "cosine"}
         )
 
     def _get_single_embedding(self, text: str) -> list[float]:
-        """Get embedding for a single text from Ollama."""
-        # Truncate text if too long (nomic-embed-text has ~8k token limit)
-        max_chars = 8000
-        if len(text) > max_chars:
-            text = text[:max_chars]
+        """Get embedding for a single text from Ollama with retry."""
+        if len(text) > MAX_EMBEDDING_CHARS:
+            text = text[:MAX_EMBEDDING_CHARS]
 
-        try:
-            response = requests.post(
-                f"{self.ollama_url}/api/embeddings",
-                json={"model": self.model, "prompt": text},
-                timeout=60
-            )
-            response.raise_for_status()
-            return response.json()["embedding"]
-        except requests.exceptions.RequestException as e:
-            # Return None on failure, handle in caller
-            print(f"    Warning: Embedding failed for chunk ({len(text)} chars): {e}")
-            return None
+        last_error = None
+        for attempt in range(1, EMBEDDING_MAX_RETRIES + 1):
+            try:
+                response = requests.post(
+                    f"{self.ollama_url}/api/embeddings",
+                    json={"model": self.model, "prompt": text},
+                    timeout=OLLAMA_REQUEST_TIMEOUT
+                )
+                response.raise_for_status()
+                return response.json()["embedding"]
+            except requests.exceptions.RequestException as e:
+                last_error = e
+                if attempt < EMBEDDING_MAX_RETRIES:
+                    wait = EMBEDDING_RETRY_BASE_WAIT * (2 ** (attempt - 1))
+                    logger.warning(
+                        "Embedding attempt %d/%d failed (%s), retrying in %.1fs",
+                        attempt, EMBEDDING_MAX_RETRIES, e, wait,
+                    )
+                    time.sleep(wait)
+
+        logger.error(
+            "Embedding failed after %d attempts (%d chars): %s",
+            EMBEDDING_MAX_RETRIES, len(text), last_error,
+        )
+        return None
 
     def _get_embeddings_parallel(
         self,
@@ -117,7 +143,13 @@ class DocumentVectorStore:
 
         Returns:
             Tuple of (number of chunks added, time taken in seconds)
+
+        Raises:
+            ValueError: If doc_id is empty
         """
+        if not doc_id:
+            raise ValueError("doc_id must not be empty")
+
         if not chunks:
             return 0, 0.0
 
@@ -130,6 +162,13 @@ class DocumentVectorStore:
             for i, (chunk, emb) in enumerate(zip(chunks, embeddings))
             if emb is not None
         ]
+
+        failed_count = len(chunks) - len(valid_data)
+        if failed_count > 0:
+            logger.warning(
+                "[%s] %d/%d chunks failed to embed",
+                doc_id, failed_count, len(chunks),
+            )
 
         if not valid_data:
             elapsed = time.time() - start_time
@@ -147,25 +186,28 @@ class DocumentVectorStore:
 
         # ChromaDB has a max batch size limit (~5461), so batch inserts
         # Use lock for thread-safe writes when parallel document processing is enabled
-        BATCH_SIZE = 5000
         total_items = len(ids)
 
         with _chroma_lock:
-            for batch_start in range(0, total_items, BATCH_SIZE):
-                batch_end = min(batch_start + BATCH_SIZE, total_items)
+            for batch_start in range(0, total_items, CHROMA_BATCH_SIZE):
+                batch_end = min(batch_start + CHROMA_BATCH_SIZE, total_items)
                 self.collection.add(
                     ids=ids[batch_start:batch_end],
                     embeddings=valid_embeddings[batch_start:batch_end],
                     documents=valid_chunks[batch_start:batch_end],
                     metadatas=metadatas[batch_start:batch_end]
                 )
-                if total_items > BATCH_SIZE and show_progress:
-                    print(f"    Stored batch {batch_start//BATCH_SIZE + 1}/{(total_items + BATCH_SIZE - 1)//BATCH_SIZE}")
+                if total_items > CHROMA_BATCH_SIZE and show_progress:
+                    logger.info(
+                        "    Stored batch %d/%d",
+                        batch_start // CHROMA_BATCH_SIZE + 1,
+                        (total_items + CHROMA_BATCH_SIZE - 1) // CHROMA_BATCH_SIZE,
+                    )
 
         elapsed = time.time() - start_time
         return len(valid_chunks), elapsed
 
-    def search(self, query: str, n_results: int = 5) -> list[dict]:
+    def search(self, query: str, n_results: int = DEFAULT_SEARCH_RESULTS) -> list[SearchResult]:
         """
         Search for relevant chunks.
 
@@ -174,8 +216,14 @@ class DocumentVectorStore:
             n_results: Number of results to return
 
         Returns:
-            List of results with text, source, and score
+            List of SearchResult objects
+
+        Raises:
+            ValueError: If query is empty
         """
+        if not query or not query.strip():
+            raise ValueError("Search query must not be empty")
+
         query_embedding = [self._get_single_embedding(query)]
 
         results = self.collection.query(
@@ -187,12 +235,12 @@ class DocumentVectorStore:
             return []
 
         return [
-            {
-                "text": doc,
-                "source": meta["source"],
-                "chunk_index": meta["chunk_index"],
-                "score": round(1 - dist, 4)  # Convert distance to similarity
-            }
+            SearchResult(
+                text=doc,
+                source=meta["source"],
+                chunk_index=meta["chunk_index"],
+                score=round(1 - dist, 4),
+            )
             for doc, meta, dist in zip(
                 results["documents"][0],
                 results["metadatas"][0],
@@ -232,19 +280,17 @@ class DocumentVectorStore:
         with _chroma_lock:
             existing = self.collection.get(where={"source": doc_id})
             if existing["ids"]:
-                # Batch deletions to avoid ChromaDB limits
-                BATCH_SIZE = 5000
                 ids_to_delete = existing["ids"]
                 total_ids = len(ids_to_delete)
 
-                for batch_start in range(0, total_ids, BATCH_SIZE):
-                    batch_end = min(batch_start + BATCH_SIZE, total_ids)
+                for batch_start in range(0, total_ids, CHROMA_BATCH_SIZE):
+                    batch_end = min(batch_start + CHROMA_BATCH_SIZE, total_ids)
                     self.collection.delete(ids=ids_to_delete[batch_start:batch_end])
 
-                print(f"Removed '{doc_id}' ({total_ids} chunks)")
+                logger.info("Removed '%s' (%d chunks)", doc_id, total_ids)
                 return total_ids
             else:
-                print(f"'{doc_id}' not found in index")
+                logger.info("'%s' not found in index", doc_id)
                 return 0
 
     def rename_document(self, old_doc_id: str, new_doc_id: str) -> int:
@@ -261,20 +307,18 @@ class DocumentVectorStore:
             Number of chunks renamed, or 0 if failed
         """
         with _chroma_lock:
-            # Check if old doc exists
             existing = self.collection.get(
                 where={"source": old_doc_id},
                 include=["embeddings", "documents", "metadatas"]
             )
 
             if not existing["ids"]:
-                print(f"'{old_doc_id}' not found in index")
+                logger.info("'%s' not found in index", old_doc_id)
                 return 0
 
-            # Check if new name already exists
             conflict = self.collection.get(where={"source": new_doc_id})
             if conflict["ids"]:
-                print(f"'{new_doc_id}' already exists in index")
+                logger.warning("'%s' already exists in index", new_doc_id)
                 return 0
 
             old_ids = existing["ids"]
@@ -282,7 +326,6 @@ class DocumentVectorStore:
             documents = existing["documents"]
             metadatas = existing["metadatas"]
 
-            # Create new IDs and update metadata
             new_ids = []
             new_metadatas = []
             for old_id, meta in zip(old_ids, metadatas):
@@ -291,18 +334,16 @@ class DocumentVectorStore:
                 new_meta = {**meta, "source": new_doc_id}
                 new_metadatas.append(new_meta)
 
-            # Batch operations to avoid limits
-            BATCH_SIZE = 5000
             total_items = len(old_ids)
 
             # Delete old entries
-            for batch_start in range(0, total_items, BATCH_SIZE):
-                batch_end = min(batch_start + BATCH_SIZE, total_items)
+            for batch_start in range(0, total_items, CHROMA_BATCH_SIZE):
+                batch_end = min(batch_start + CHROMA_BATCH_SIZE, total_items)
                 self.collection.delete(ids=old_ids[batch_start:batch_end])
 
             # Add with new IDs (preserving embeddings)
-            for batch_start in range(0, total_items, BATCH_SIZE):
-                batch_end = min(batch_start + BATCH_SIZE, total_items)
+            for batch_start in range(0, total_items, CHROMA_BATCH_SIZE):
+                batch_end = min(batch_start + CHROMA_BATCH_SIZE, total_items)
                 self.collection.add(
                     ids=new_ids[batch_start:batch_end],
                     embeddings=embeddings[batch_start:batch_end],
@@ -310,7 +351,7 @@ class DocumentVectorStore:
                     metadatas=new_metadatas[batch_start:batch_end]
                 )
 
-            print(f"Renamed '{old_doc_id}' -> '{new_doc_id}' ({total_items} chunks)")
+            logger.info("Renamed '%s' -> '%s' (%d chunks)", old_doc_id, new_doc_id, total_items)
             return total_items
 
     def list_documents(self) -> dict[str, int]:
@@ -327,22 +368,22 @@ class DocumentVectorStore:
             sources[src] = sources.get(src, 0) + 1
         return sources
 
-    def get_stats(self) -> dict:
+    def get_stats(self) -> IndexStats:
         """Get index statistics."""
         docs = self.list_documents()
         total_chunks = sum(docs.values())
-        return {
-            "total_documents": len(docs),
-            "total_chunks": total_chunks,
-            "persist_dir": self.persist_dir,
-            "model": self.model
-        }
+        return IndexStats(
+            total_documents=len(docs),
+            total_chunks=total_chunks,
+            persist_dir=self.persist_dir,
+            model=self.model,
+        )
 
 
-def check_ollama_connection(url: str = "http://localhost:11434") -> bool:
+def check_ollama_connection(url: str = DEFAULT_OLLAMA_URL) -> bool:
     """Check if Ollama is running and accessible."""
     try:
-        response = requests.get(f"{url}/api/tags", timeout=5)
+        response = requests.get(f"{url}/api/tags", timeout=OLLAMA_HEALTH_TIMEOUT)
         return response.status_code == 200
     except requests.exceptions.RequestException:
         return False
@@ -361,13 +402,13 @@ class BatchedDocumentVectorStore:
     for indexing large numbers of documents.
     """
 
-    DEFAULT_BATCH_SIZE = 5000
+    DEFAULT_BATCH_SIZE = CHROMA_BATCH_SIZE
 
     def __init__(
         self,
-        persist_dir: str = "./chroma_db",
-        model: str = "nomic-embed-text",
-        ollama_url: str = "http://localhost:11434",
+        persist_dir: str = DEFAULT_PERSIST_DIR,
+        model: str = DEFAULT_EMBEDDING_MODEL,
+        ollama_url: str = DEFAULT_OLLAMA_URL,
         batch_size: int = None
     ):
         """
@@ -386,7 +427,7 @@ class BatchedDocumentVectorStore:
         self._pending_chunks: list[str] = []
         self._pending_ids: list[str] = []
         self._pending_metadatas: list[dict] = []
-        self._pending_doc_ids: set[str] = set()  # Track which docs have pending chunks
+        self._pending_doc_ids: set[str] = set()
 
         # Statistics
         self._total_embedded = 0
@@ -417,7 +458,6 @@ class BatchedDocumentVectorStore:
         if not chunks:
             return 0, 0.0
 
-        # Add chunks to pending batch
         for i, chunk in enumerate(chunks):
             chunk_id = f"{doc_id}_chunk_{i}"
             chunk_meta = {"source": doc_id, "chunk_index": i, **(metadata or {})}
@@ -429,7 +469,6 @@ class BatchedDocumentVectorStore:
         self._pending_doc_ids.add(doc_id)
         num_queued = len(chunks)
 
-        # Check if we should flush
         if len(self._pending_chunks) >= self.batch_size:
             self._flush_batch(show_progress=show_progress)
 
@@ -449,9 +488,8 @@ class BatchedDocumentVectorStore:
         num_chunks = len(self._pending_chunks)
         self._flush_count += 1
 
-        print(f"\n  [Batch {self._flush_count}] Embedding {num_chunks} chunks...")
+        logger.info("\n  [Batch %d] Embedding %d chunks...", self._flush_count, num_chunks)
 
-        # Get embeddings for all pending chunks
         embeddings = self.store._get_embeddings_parallel(
             self._pending_chunks,
             show_progress=show_progress
@@ -466,6 +504,13 @@ class BatchedDocumentVectorStore:
             if emb is not None
         ]
 
+        failed_count = num_chunks - len(valid_data)
+        if failed_count > 0:
+            logger.warning(
+                "[Batch %d] %d/%d chunks failed to embed",
+                self._flush_count, failed_count, num_chunks,
+            )
+
         if not valid_data:
             elapsed = time.time() - start_time
             self._clear_pending()
@@ -477,7 +522,6 @@ class BatchedDocumentVectorStore:
         valid_metadatas = [d[3] for d in valid_data]
 
         # Store in ChromaDB (in batches to avoid limits)
-        CHROMA_BATCH_SIZE = 5000
         total_items = len(valid_ids)
 
         with _chroma_lock:
@@ -493,7 +537,10 @@ class BatchedDocumentVectorStore:
         elapsed = time.time() - start_time
         self._total_embedded += len(valid_chunks)
 
-        print(f"  [Batch {self._flush_count}] Stored {len(valid_chunks)} chunks in {elapsed:.1f}s")
+        logger.info(
+            "  [Batch %d] Stored %d chunks in %.1fs",
+            self._flush_count, len(valid_chunks), elapsed,
+        )
 
         self._clear_pending()
         return len(valid_chunks), elapsed
@@ -523,19 +570,22 @@ class BatchedDocumentVectorStore:
 
     def get_stats(self) -> dict:
         """Get batching statistics."""
+        store_stats = self.store.get_stats()
         return {
             "total_embedded": self._total_embedded,
             "flush_count": self._flush_count,
             "pending_chunks": len(self._pending_chunks),
             "pending_documents": len(self._pending_doc_ids),
             "batch_size": self.batch_size,
-            **self.store.get_stats()
+            "total_documents": store_stats.total_documents,
+            "total_chunks": store_stats.total_chunks,
+            "persist_dir": store_stats.persist_dir,
+            "model": store_stats.model,
         }
 
     # Delegate other methods to underlying store
     def is_document_indexed(self, doc_id: str) -> bool:
         """Check if a document is already indexed."""
-        # Also check pending chunks
         if doc_id in self._pending_doc_ids:
             return True
         return self.store.is_document_indexed(doc_id)
@@ -546,7 +596,6 @@ class BatchedDocumentVectorStore:
 
     def remove_document(self, doc_id: str) -> int:
         """Remove a document from the index."""
-        # Also remove from pending if present
         if doc_id in self._pending_doc_ids:
             new_pending = []
             new_ids = []
@@ -569,15 +618,15 @@ class BatchedDocumentVectorStore:
         """List all indexed documents with chunk counts."""
         return self.store.list_documents()
 
-    def search(self, query: str, n_results: int = 5) -> list[dict]:
+    def search(self, query: str, n_results: int = DEFAULT_SEARCH_RESULTS) -> list[SearchResult]:
         """Search for relevant chunks."""
         return self.store.search(query, n_results)
 
 
-def check_model_available(model: str, url: str = "http://localhost:11434") -> bool:
+def check_model_available(model: str, url: str = DEFAULT_OLLAMA_URL) -> bool:
     """Check if a specific model is available in Ollama."""
     try:
-        response = requests.get(f"{url}/api/tags", timeout=5)
+        response = requests.get(f"{url}/api/tags", timeout=OLLAMA_HEALTH_TIMEOUT)
         if response.status_code == 200:
             models = response.json().get("models", [])
             return any(m["name"].startswith(model) for m in models)
@@ -587,22 +636,22 @@ def check_model_available(model: str, url: str = "http://localhost:11434") -> bo
 
 
 if __name__ == "__main__":
-    # Test the vector store
-    print("Checking Ollama connection...")
+    logging.basicConfig(level=logging.INFO, format="%(message)s")
+
+    logger.info("Checking Ollama connection...")
 
     if not check_ollama_connection():
-        print("ERROR: Ollama is not running!")
-        print("Start Ollama with: ollama serve")
+        logger.error("ERROR: Ollama is not running!")
+        logger.error("Start Ollama with: ollama serve")
         exit(1)
 
     if not check_model_available("nomic-embed-text"):
-        print("ERROR: nomic-embed-text model not found!")
-        print("Pull it with: ollama pull nomic-embed-text")
+        logger.error("ERROR: nomic-embed-text model not found!")
+        logger.error("Pull it with: ollama pull nomic-embed-text")
         exit(1)
 
-    print("Ollama is ready!")
+    logger.info("Ollama is ready!")
 
-    # Test embedding
     store = DocumentVectorStore("./test_chroma_db")
 
     test_chunks = [
@@ -614,11 +663,10 @@ if __name__ == "__main__":
     store.add_document("test_doc.pdf", test_chunks)
 
     results = store.search("What programming languages are mentioned?")
-    print("\nSearch results:")
+    logger.info("\nSearch results:")
     for r in results:
-        print(f"  [{r['score']}] {r['source']}: {r['text'][:50]}...")
+        logger.info("  [%s] %s: %s...", r.score, r.source, r.text[:50])
 
-    print("\nStats:", store.get_stats())
+    logger.info("\nStats: %s", store.get_stats().to_dict())
 
-    # Cleanup test
     store.remove_document("test_doc.pdf")

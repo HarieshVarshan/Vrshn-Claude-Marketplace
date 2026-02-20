@@ -12,9 +12,11 @@ Usage:
     python index.py ./docs --ext pdf docx       # Index only specific formats
     python index.py --force file.pdf            # Force re-index existing file
     python index.py --force ./docs              # Force re-index entire folder
+    python index.py --engine tiparse file.pdf   # Use TiParse LLM extraction
 """
 
 import glob
+import logging
 import os
 import sys
 import time
@@ -24,7 +26,12 @@ from threading import Lock
 
 from document_extractor import extract_text, is_supported, get_supported_extensions, get_file_type
 from chunker import chunk_by_paragraphs
+from config import DEFAULT_CHUNK_SIZE, DEFAULT_PERSIST_DIR, CHROMA_BATCH_SIZE
+from extraction_engine import create_engine
+from models import IndexingResult
 from vector_store import DocumentVectorStore, BatchedDocumentVectorStore, check_ollama_connection, check_model_available
+
+logger = logging.getLogger(__name__)
 
 # Lock for thread-safe printing
 print_lock = Lock()
@@ -42,10 +49,11 @@ def format_time(seconds: float) -> str:
 def index_file(
     file_path: str,
     store,  # DocumentVectorStore or BatchedDocumentVectorStore
-    chunk_size: int = 500,
+    chunk_size: int = DEFAULT_CHUNK_SIZE,
     force: bool = False,
-    quiet: bool = False
-) -> tuple[bool, str, float, int]:
+    quiet: bool = False,
+    engine=None,
+) -> IndexingResult:
     """
     Index a single file to the vector store.
 
@@ -55,17 +63,26 @@ def index_file(
         chunk_size: Maximum chunk size
         force: Re-index if already exists
         quiet: Suppress progress output (for parallel processing)
+        engine: Extraction engine (LibraryEngine or TiParseEngine). None = default library.
 
     Returns:
-        Tuple of (success, status_message, time_taken, num_chunks)
+        IndexingResult with success status, message, timing, and chunk count.
     """
+    doc_id = os.path.basename(file_path)
+    engine_name = getattr(engine, "name", "library") if engine else "library"
+
     if not os.path.isfile(file_path):
-        return False, f"File not found: {file_path}", 0.0, 0
+        return IndexingResult(
+            success=False, doc_id=doc_id,
+            message=f"File not found: {file_path}", engine=engine_name,
+        )
 
     if not is_supported(file_path):
-        return False, f"Unsupported format: {Path(file_path).suffix}", 0.0, 0
+        return IndexingResult(
+            success=False, doc_id=doc_id,
+            message=f"Unsupported format: {Path(file_path).suffix}", engine=engine_name,
+        )
 
-    doc_id = os.path.basename(file_path)
     file_type = get_file_type(file_path)
 
     # Check if already indexed
@@ -73,34 +90,59 @@ def index_file(
         if force:
             if not quiet:
                 with print_lock:
-                    print(f"  Re-indexing: {doc_id}")
+                    logger.info("  Re-indexing: %s", doc_id)
             store.remove_document(doc_id)
         else:
             chunks = store.get_document_chunks(doc_id)
-            return False, f"Already indexed ({len(chunks)} chunks). Use --force to re-index.", 0.0, 0
+            return IndexingResult(
+                success=False, doc_id=doc_id,
+                message=f"Already indexed ({len(chunks)} chunks). Use --force to re-index.",
+                engine=engine_name,
+            )
 
     try:
         start_time = time.time()
 
-        # Extract text
-        text = extract_text(file_path)
-        if not text.strip():
-            return False, "No text extracted", 0.0, 0
+        if engine is not None:
+            # Use the provided extraction engine
+            result = engine.extract_and_chunk(file_path)
+            chunks = result.chunks
+            metadata = result.metadata
+            engine_name = result.engine  # may differ if fallback occurred
+        else:
+            # Default: library-based extraction
+            text = extract_text(file_path)
+            if not text.strip():
+                return IndexingResult(
+                    success=False, doc_id=doc_id,
+                    message="No text extracted", engine=engine_name,
+                )
+            chunks = chunk_by_paragraphs(text, max_chunk_size=chunk_size)
+            metadata = {
+                "file_path": os.path.abspath(file_path),
+                "file_type": file_type,
+            }
 
-        # Chunk text
-        chunks = chunk_by_paragraphs(text, max_chunk_size=chunk_size)
+        if not chunks:
+            return IndexingResult(
+                success=False, doc_id=doc_id,
+                message="No text extracted", engine=engine_name,
+            )
 
         # Add to store (quiet mode disables per-chunk progress)
-        metadata = {
-            "file_path": os.path.abspath(file_path),
-            "file_type": file_type
-        }
         num_added, embed_time = store.add_document(doc_id, chunks, metadata, show_progress=not quiet)
         total_time = time.time() - start_time
-        return True, f"Indexed {num_added} chunks in {format_time(total_time)}", total_time, num_added
+        return IndexingResult(
+            success=True, doc_id=doc_id,
+            message=f"Indexed {num_added} chunks in {format_time(total_time)}",
+            elapsed_seconds=total_time, num_chunks=num_added, engine=engine_name,
+        )
 
     except Exception as e:
-        return False, f"Error: {e}", 0.0, 0
+        return IndexingResult(
+            success=False, doc_id=doc_id,
+            message=f"Error: {e}", engine=engine_name, error=str(e),
+        )
 
 
 def find_documents(path: str, extensions: list[str] | None = None) -> list[str]:
@@ -149,13 +191,15 @@ def find_documents(path: str, extensions: list[str] | None = None) -> list[str]:
 
 def index(
     paths: list[str],
-    persist_dir: str = "./chroma_db",
-    chunk_size: int = 500,
+    persist_dir: str = DEFAULT_PERSIST_DIR,
+    chunk_size: int = DEFAULT_CHUNK_SIZE,
     force: bool = False,
     extensions: list[str] | None = None,
     parallel_docs: int = 1,
     batch_mode: bool = False,
-    batch_size: int = 5000
+    batch_size: int = CHROMA_BATCH_SIZE,
+    engine_name: str = "library",
+    tiparse_model: str | None = None,
 ) -> dict:
     """
     Index files or directories to the vector store.
@@ -168,26 +212,36 @@ def index(
         extensions: Only index specific extensions (for directories)
         parallel_docs: Number of documents to process in parallel
         batch_mode: Batch chunks and embed only after reaching batch_size (more efficient)
-        batch_size: Number of chunks to accumulate before embedding (default: 5000)
+        batch_size: Number of chunks to accumulate before embedding
+        engine_name: Extraction engine name ("library" or "tiparse")
+        tiparse_model: Model name for TiParse engine (optional)
 
     Returns:
         Statistics dictionary
     """
     # Check Ollama
     if not check_ollama_connection():
-        print("ERROR: Ollama is not running!")
-        print("Start Ollama with: ollama serve")
+        logger.error("ERROR: Ollama is not running!")
+        logger.error("Start Ollama with: ollama serve")
         sys.exit(1)
 
     if not check_model_available("nomic-embed-text"):
-        print("ERROR: nomic-embed-text model not found!")
-        print("Pull it with: ollama pull nomic-embed-text")
+        logger.error("ERROR: nomic-embed-text model not found!")
+        logger.error("Pull it with: ollama pull nomic-embed-text")
         sys.exit(1)
+
+    # Create extraction engine
+    engine_kwargs = {"chunk_size": chunk_size}
+    if engine_name == "tiparse" and tiparse_model:
+        engine_kwargs["model"] = tiparse_model
+        engine_kwargs["library_chunk_size"] = chunk_size
+    engine = create_engine(engine_name, **engine_kwargs)
+    logger.info("Extraction engine: %s", engine.name)
 
     # Use batched store for more efficient embedding when processing many documents
     if batch_mode:
         store = BatchedDocumentVectorStore(persist_dir, batch_size=batch_size)
-        print(f"Batched embedding mode: will embed every {batch_size} chunks")
+        logger.info("Batched embedding mode: will embed every %d chunks", batch_size)
     else:
         store = DocumentVectorStore(persist_dir)
 
@@ -197,11 +251,11 @@ def index(
         files = find_documents(path, extensions)
         if not files:
             if os.path.isfile(path):
-                print(f"Unsupported file: {path}")
+                logger.warning("Unsupported file: %s", path)
             elif os.path.isdir(path):
-                print(f"No supported documents in: {path}")
+                logger.warning("No supported documents in: %s", path)
             else:
-                print(f"Path not found: {path}")
+                logger.warning("Path not found: %s", path)
         all_files.extend(files)
 
     # Remove duplicates, preserve order
@@ -213,22 +267,20 @@ def index(
             unique_files.append(f)
 
     if not unique_files:
-        print("\nNo documents to index.")
-        print(f"Supported formats: {', '.join(get_supported_extensions())}")
+        logger.info("\nNo documents to index.")
+        logger.info("Supported formats: %s", ', '.join(get_supported_extensions()))
         return {"indexed": 0, "skipped": 0, "failed": 0, "total_chunks": 0}
 
-    print(f"Found {len(unique_files)} document(s) to process")
+    logger.info("Found %d document(s) to process", len(unique_files))
     if parallel_docs > 1:
-        print(f"Parallel document processing: {parallel_docs} workers")
-    print("-" * 50)
+        logger.info("Parallel document processing: %d workers", parallel_docs)
+    logger.info("-" * 50)
 
     stats = {"indexed": 0, "skipped": 0, "failed": 0, "total_chunks": 0, "total_time": 0.0}
     overall_start = time.time()
 
     if parallel_docs > 1:
         # Parallel document processing
-        # Note: When processing docs in parallel, we use sequential embedding per doc
-        # to avoid nested thread pool issues. Total concurrency = parallel_docs.
         from tqdm import tqdm
         from concurrent.futures import TimeoutError as FuturesTimeoutError
 
@@ -240,13 +292,17 @@ def index(
             idx, file_path = file_info
             doc_name = os.path.basename(file_path)
             try:
-                success, message, elapsed, num_chunks = index_file(
-                    file_path, store, chunk_size, force, quiet=True
+                result = index_file(
+                    file_path, store, chunk_size, force, quiet=True, engine=engine,
                 )
-                return idx, file_path, doc_name, success, message, elapsed, num_chunks
+                return idx, file_path, doc_name, result
             except Exception as e:
                 import traceback
-                return idx, file_path, doc_name, False, f"Error: {e}\n{traceback.format_exc()}", 0.0, 0
+                return idx, file_path, doc_name, IndexingResult(
+                    success=False, doc_id=doc_name,
+                    message=f"Error: {e}\n{traceback.format_exc()}",
+                    engine=engine.name, error=str(e),
+                )
 
         try:
             with ThreadPoolExecutor(max_workers=parallel_docs) as executor:
@@ -256,30 +312,36 @@ def index(
                 with tqdm(total=len(unique_files), desc="Indexing", unit="doc") as pbar:
                     for future in as_completed(futures):
                         try:
-                            _, file_path, doc_name, success, message, elapsed, num_chunks = future.result(timeout=3600)
+                            _, file_path, doc_name, result = future.result(timeout=3600)
                         except FuturesTimeoutError:
                             _, file_path = futures[future]
                             doc_name = os.path.basename(file_path)
-                            success, message, elapsed, num_chunks = False, "Timeout (>1hr)", 0.0, 0
+                            result = IndexingResult(
+                                success=False, doc_id=doc_name,
+                                message="Timeout (>1hr)", engine=engine.name,
+                            )
                         except Exception as e:
                             _, file_path = futures[future]
                             doc_name = os.path.basename(file_path)
-                            success, message, elapsed, num_chunks = False, f"Error: {e}", 0.0, 0
+                            result = IndexingResult(
+                                success=False, doc_id=doc_name,
+                                message=f"Error: {e}", engine=engine.name, error=str(e),
+                            )
 
-                        if success:
+                        if result.success:
                             stats["indexed"] += 1
-                            stats["total_time"] += elapsed
-                            stats["total_chunks"] += num_chunks
+                            stats["total_time"] += result.elapsed_seconds
+                            stats["total_chunks"] += result.num_chunks
                             with print_lock:
-                                tqdm.write(f"  ✓ {doc_name}: {num_chunks} chunks in {format_time(elapsed)}")
-                        elif "Already indexed" in message:
+                                tqdm.write(f"  \u2713 {doc_name}: {result.num_chunks} chunks in {format_time(result.elapsed_seconds)}")
+                        elif "Already indexed" in result.message:
                             stats["skipped"] += 1
                             with print_lock:
-                                tqdm.write(f"  → {doc_name}: {message}")
+                                tqdm.write(f"  \u2192 {doc_name}: {result.message}")
                         else:
                             stats["failed"] += 1
                             with print_lock:
-                                tqdm.write(f"  ✗ {doc_name}: {message}")
+                                tqdm.write(f"  \u2717 {doc_name}: {result.message}")
 
                         pbar.update(1)
         finally:
@@ -293,20 +355,20 @@ def index(
         for i, file_path in enumerate(unique_files, 1):
             doc_name = os.path.basename(file_path)
             file_type = get_file_type(file_path)
-            print(f"\n[{i}/{len(unique_files)}] {doc_name} ({file_type})")
+            logger.info("\n[%d/%d] %s (%s)", i, len(unique_files), doc_name, file_type)
 
-            success, message, elapsed, num_chunks = index_file(file_path, store, chunk_size, force)
+            result = index_file(file_path, store, chunk_size, force, engine=engine)
 
-            if success:
-                print(f"  ✓ {message}")
+            if result.success:
+                logger.info("  \u2713 %s", result.message)
                 stats["indexed"] += 1
-                stats["total_time"] += elapsed
-                stats["total_chunks"] += num_chunks
-            elif "Already indexed" in message:
-                print(f"  → {message}")
+                stats["total_time"] += result.elapsed_seconds
+                stats["total_chunks"] += result.num_chunks
+            elif "Already indexed" in result.message:
+                logger.info("  \u2192 %s", result.message)
                 stats["skipped"] += 1
             else:
-                print(f"  ✗ {message}")
+                logger.info("  \u2717 %s", result.message)
                 stats["failed"] += 1
 
     overall_time = time.time() - overall_start
@@ -315,7 +377,7 @@ def index(
     if batch_mode and hasattr(store, 'flush'):
         pending = store.get_pending_count()
         if pending > 0:
-            print(f"\nFlushing final {pending} chunks...")
+            logger.info("\nFlushing final %d chunks...", pending)
             flushed, flush_time = store.flush()
             stats["total_chunks"] += flushed
             stats["total_time"] += flush_time
@@ -323,22 +385,25 @@ def index(
     overall_time = time.time() - overall_start
 
     # Summary
-    print("\n" + "=" * 50)
-    print("Indexing Complete!")
-    print(f"  Indexed: {stats['indexed']} documents ({stats['total_chunks']} chunks)")
-    print(f"  Skipped: {stats['skipped']} documents")
-    print(f"  Failed:  {stats['failed']} documents")
-    print(f"  Time:    {format_time(overall_time)}")
-    print(f"  Database: {persist_dir}")
+    logger.info("\n" + "=" * 50)
+    logger.info("Indexing Complete!")
+    logger.info("  Indexed: %d documents (%d chunks)", stats['indexed'], stats['total_chunks'])
+    logger.info("  Skipped: %d documents", stats['skipped'])
+    logger.info("  Failed:  %d documents", stats['failed'])
+    logger.info("  Time:    %s", format_time(overall_time))
+    logger.info("  Database: %s", persist_dir)
+    logger.info("  Engine:  %s", engine.name)
     if batch_mode:
         batch_stats = store.get_stats()
-        print(f"  Batches: {batch_stats['flush_count']} embedding batches")
+        logger.info("  Batches: %d embedding batches", batch_stats['flush_count'])
 
     return stats
 
 
 def main():
     import argparse
+
+    logging.basicConfig(level=logging.INFO, format="%(message)s")
 
     parser = argparse.ArgumentParser(
         description="Index documents to vector database",
@@ -354,11 +419,12 @@ Examples:
   python index.py ./docs --ext pdf docx     # Only PDF and DOCX
   python index.py --force updated.pdf       # Force re-index
   python index.py --force ./docs            # Re-index entire folder
+  python index.py --engine tiparse file.pdf # Use TiParse LLM extraction
 
 Parallelism (for faster indexing):
   python index.py ./docs -w 16              # 16 embedding workers (default: 8)
   python index.py ./docs -p 4               # 4 documents in parallel
-  python index.py ./docs -p 4 -w 4          # 4 docs × 4 workers = 16 total requests
+  python index.py ./docs -p 4 -w 4          # 4 docs x 4 workers = 16 total requests
 
 Batched embedding (more efficient for large document sets):
   python index.py ./docs --batch            # Batch mode (embed every 5000 chunks)
@@ -376,14 +442,14 @@ Environment variables:
     )
     parser.add_argument(
         "--db", "-d",
-        default="./chroma_db",
-        help="Vector database directory (default: ./chroma_db)"
+        default=DEFAULT_PERSIST_DIR,
+        help=f"Vector database directory (default: {DEFAULT_PERSIST_DIR})"
     )
     parser.add_argument(
         "--chunk-size", "-c",
         type=int,
-        default=500,
-        help="Maximum chunk size in characters (default: 500)"
+        default=DEFAULT_CHUNK_SIZE,
+        help=f"Maximum chunk size in characters (default: {DEFAULT_CHUNK_SIZE})"
     )
     parser.add_argument(
         "--force", "-f",
@@ -415,8 +481,19 @@ Environment variables:
     parser.add_argument(
         "--batch-size", "-B",
         type=int,
-        default=5000,
-        help="Number of chunks to accumulate before embedding (default: 5000)"
+        default=CHROMA_BATCH_SIZE,
+        help=f"Number of chunks to accumulate before embedding (default: {CHROMA_BATCH_SIZE})"
+    )
+    parser.add_argument(
+        "--engine",
+        choices=["library", "tiparse"],
+        default="library",
+        help="Extraction engine (default: library)"
+    )
+    parser.add_argument(
+        "--tiparse-model",
+        default=None,
+        help="Model name for TiParse engine (optional)"
     )
 
     args = parser.parse_args()
@@ -433,7 +510,9 @@ Environment variables:
         extensions=args.ext,
         parallel_docs=args.parallel,
         batch_mode=args.batch,
-        batch_size=args.batch_size
+        batch_size=args.batch_size,
+        engine_name=args.engine,
+        tiparse_model=args.tiparse_model,
     )
 
 

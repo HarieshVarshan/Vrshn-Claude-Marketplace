@@ -3,8 +3,10 @@ Text Chunking Module
 Split text into overlapping chunks for embedding.
 """
 
+from config import DEFAULT_CHUNK_SIZE, DEFAULT_PARAGRAPH_CHUNK_SIZE, DEFAULT_CHUNK_OVERLAP
 
-def chunk_text(text: str, chunk_size: int = 500, overlap: int = 50) -> list[str]:
+
+def chunk_text(text: str, chunk_size: int = DEFAULT_CHUNK_SIZE, overlap: int = DEFAULT_CHUNK_OVERLAP) -> list[str]:
     """
     Split text into overlapping chunks by character count.
 
@@ -31,7 +33,7 @@ def chunk_text(text: str, chunk_size: int = 500, overlap: int = 50) -> list[str]
     return chunks
 
 
-def chunk_by_paragraphs(text: str, max_chunk_size: int = 1000) -> list[str]:
+def chunk_by_paragraphs(text: str, max_chunk_size: int = DEFAULT_PARAGRAPH_CHUNK_SIZE) -> list[str]:
     """
     Split text by paragraphs, respecting max chunk size.
     Tries to keep paragraphs together when possible.
@@ -58,7 +60,7 @@ def chunk_by_paragraphs(text: str, max_chunk_size: int = 1000) -> list[str]:
                 chunks.append(current_chunk.strip())
                 current_chunk = ""
             # Split large paragraph into smaller chunks
-            sub_chunks = chunk_text(para, max_chunk_size, overlap=50)
+            sub_chunks = chunk_text(para, max_chunk_size, overlap=DEFAULT_CHUNK_OVERLAP)
             chunks.extend(sub_chunks)
         elif len(current_chunk) + len(para) + 2 < max_chunk_size:
             current_chunk += para + "\n\n"
