@@ -36,9 +36,14 @@
             "source": "./jira-mcp"
         },
         {
-            "name": "mcp-excalidraw",
+            "name": "excalidraw-mcp",
             "description": "MCP server for Excalidraw - create, edit, and manage diagrams with a live canvas, element CRUD, layout, scene awareness, and file I/O",
-            "source": "./mcp_excalidraw"
+            "source": "./excalidraw-mcp"
+        },
+        {
+            "name": "obsidian-mcp",
+            "description": "MCP server for Obsidian vaults - read, create, edit, search notes, and manage tags",
+            "source": "./obsidian-mcp"
         }
     ]
 }

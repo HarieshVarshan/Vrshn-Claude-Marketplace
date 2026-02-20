@@ -12,7 +12,7 @@ MCP server for Excalidraw with a live canvas, WebSocket sync, and 26 tools for d
 ### Setup
 
 ```bash
-cd mcp_excalidraw
+cd excalidraw-mcp
 npm ci
 npm run build
 ```
