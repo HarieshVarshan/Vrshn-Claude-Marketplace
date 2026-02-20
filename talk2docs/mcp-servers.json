@@ -1,12 +1,15 @@
 {
     "mcpServers": {
-        "ldoc-search": {
+        "talk2docs": {
             "type": "stdio",
-            "command": "python",
+            "command": "${HOME}/.local/share/talk2docs/venv/bin/python",
             "args": ["${CLAUDE_PLUGIN_ROOT}/mcp_server.py"],
             "env": {
                 "CHROMA_DB_PATH": "${CLAUDE_PLUGIN_ROOT}/chroma_db",
-                "OLLAMA_MODEL": "nomic-embed-text"
+                "OLLAMA_MODEL": "nomic-embed-text",
+                "PYTHONPATH": "${CLAUDE_PLUGIN_ROOT}",
+                "OPENAI_API_KEY": "${OPENAI_API_KEY}",
+                "OPENAI_BASE_URL": "${OPENAI_BASE_URL}"
             }
         }
     }

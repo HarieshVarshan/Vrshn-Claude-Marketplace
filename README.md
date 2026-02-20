@@ -170,7 +170,7 @@ python index.py /path/to/documents -p 4 -w 8
 
 ```bash
 # Make sure you're in the talk2docs directory with venv activated
-claude mcp add --transport stdio --scope user ldoc-search \
+claude mcp add --transport stdio --scope user talk2docs \
   --env CHROMA_DB_PATH=$(pwd)/chroma_db \
   --env OLLAMA_MODEL=nomic-embed-text \
   -- $(pwd)/venv/bin/python $(pwd)/mcp_server.py
@@ -193,7 +193,7 @@ claude mcp list
 
 # Remove an MCP server
 claude mcp remove atlassian
-claude mcp remove ldoc-search
+claude mcp remove talk2docs
 
 # Check MCP server status
 claude mcp status

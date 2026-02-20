@@ -1,6 +1,6 @@
-# Setting Up ldoc-search MCP Server for Claude Code
+# Setting Up talk2docs MCP Server for Claude Code
 
-This document describes how to add the `ldoc-search` MCP server to Claude Code.
+This document describes how to add the `talk2docs` MCP server to Claude Code.
 
 ---
 
@@ -9,11 +9,11 @@ This document describes how to add the `ldoc-search` MCP server to Claude Code.
 ### Add the MCP Server (Global)
 
 ```bash
-claude mcp add --transport stdio --scope user ldoc-search \
-  --env CHROMA_DB_PATH=/home/harieshvarshan/ti/SWATI/vrshn-marketplace/ldoc-mcp-server/chroma_db \
-  --env PYTHONPATH=/home/harieshvarshan/ti/SWATI/vrshn-marketplace/ldoc-mcp-server \
-  -- /home/harieshvarshan/ti/SWATI/vrshn-marketplace/ldoc-mcp-server/venv/bin/python \
-  /home/harieshvarshan/ti/SWATI/vrshn-marketplace/ldoc-mcp-server/mcp_server.py
+claude mcp add --transport stdio --scope user talk2docs \
+  --env CHROMA_DB_PATH=/home/harieshvarshan/ti/SWATI/vrshn-marketplace/talk2docs/chroma_db \
+  --env PYTHONPATH=/home/harieshvarshan/ti/SWATI/vrshn-marketplace/talk2docs \
+  -- /home/harieshvarshan/ti/SWATI/vrshn-marketplace/talk2docs/venv/bin/python \
+  /home/harieshvarshan/ti/SWATI/vrshn-marketplace/talk2docs/mcp_server.py
 ```
 
 ### Verify
@@ -24,7 +24,7 @@ claude mcp list
 
 Expected output:
 ```
-ldoc-search: ... - ✓ Connected
+talk2docs: ... - ✓ Connected
 ```
 
 ### Restart Claude Code
@@ -32,7 +32,7 @@ ldoc-search: ... - ✓ Connected
 ```bash
 /exit
 claude
-/mcp  # Should list ldoc-search
+/mcp  # Should list talk2docs
 ```
 
 ---
@@ -42,8 +42,8 @@ claude
 | Command | Description |
 |---------|-------------|
 | `claude mcp list` | List all MCP servers |
-| `claude mcp get ldoc-search` | Get server details |
-| `claude mcp remove ldoc-search` | Remove the server |
+| `claude mcp get talk2docs` | Get server details |
+| `claude mcp remove talk2docs` | Remove the server |
 
 ---
 
@@ -63,13 +63,13 @@ Config is saved in `~/.claude.json`:
 ```json
 {
   "mcpServers": {
-    "ldoc-search": {
+    "talk2docs": {
       "type": "stdio",
       "command": "/path/to/venv/bin/python",
       "args": ["/path/to/mcp_server.py"],
       "env": {
         "CHROMA_DB_PATH": "/path/to/chroma_db",
-        "PYTHONPATH": "/path/to/ldoc-mcp-server"
+        "PYTHONPATH": "/path/to/talk2docs"
       }
     }
   }
@@ -116,6 +116,6 @@ Running it manually starts the MCP server in stdio mode. It will sit quietly wai
 
 **Re-add server:**
 ```bash
-claude mcp remove ldoc-search
-claude mcp add --transport stdio --scope user ldoc-search ...
+claude mcp remove talk2docs
+claude mcp add --transport stdio --scope user talk2docs ...
 ```
