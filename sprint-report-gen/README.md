@@ -1,4 +1,4 @@
-# jira-sprint-report
+# sprint-report-gen
 
 A Claude agent that generates a concise sprint status report by reading the latest Jira comment on each ticket in the active sprint.
 
