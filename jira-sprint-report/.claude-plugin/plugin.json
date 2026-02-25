@@ -1,0 +1,9 @@
+{
+    "name": "jira-sprint-report",
+    "description": "Agent that generates a sprint status report from the latest Jira comments on active sprint tickets",
+    "version": "1.0.0",
+    "author": {
+        "name": "Harieshvarshan",
+        "email": "harieshvarshan@example.com"
+    }
+}

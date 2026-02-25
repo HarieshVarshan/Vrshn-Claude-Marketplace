@@ -44,6 +44,11 @@
             "name": "obsidian-mcp",
             "description": "MCP server for Obsidian vaults - read, create, edit, search notes, and manage tags",
             "source": "./obsidian-mcp"
+        },
+        {
+            "name": "jira-sprint-report",
+            "description": "Agent that generates sprint status reports from latest Jira comments on active sprint tickets",
+            "source": "./jira-sprint-report"
         }
     ]
 }
