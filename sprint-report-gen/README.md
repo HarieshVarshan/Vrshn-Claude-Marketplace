@@ -14,13 +14,14 @@ A Claude agent that generates a concise sprint status report by reading the late
 
 The agent produces three outputs every time it runs:
 
-1. **On-screen report** -- displayed directly in the conversation
-2. **Markdown file** -- `sprint-report-{sprint}-{date}.md`
+1. **On-screen report** -- displayed directly in the conversation with metrics, ticket table, and insights
+2. **Confluence page update** -- publishes an expandable macro to the sprint tracking page with sprint metrics and the ticket table (completed tickets excluded). Each sprint gets its own expandable section, latest on top.
 3. **Excel file** -- `sprint-report-{sprint}-{date}.xlsx` with two sheets: Sprint Progress (metrics) and All Tickets (full breakdown with color-coded status)
 
 ## Prerequisites
 
 - The **jira-mcp** plugin must be installed and configured (provides the Jira tools this agent uses)
+- The **confluence-mcp** plugin must be installed and configured (for publishing reports)
 
 ## Usage
 
@@ -66,7 +67,7 @@ PROJ-101, PROJ-105, PROJ-107, PROJ-109
 ## Project Structure
 
 ```
-jira-sprint-report/
+sprint-report-gen/
 ├── .claude-plugin/
 │   └── plugin.json            # Plugin metadata
 ├── agents/
