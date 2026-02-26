@@ -41,11 +41,6 @@
             "source": "./excalidraw-mcp"
         },
         {
-            "name": "obsidian-mcp",
-            "description": "MCP server for Obsidian vaults - read, create, edit, search notes, and manage tags",
-            "source": "./obsidian-mcp"
-        },
-        {
             "name": "sprint-report-gen",
             "description": "Agent that generates sprint status reports from latest Jira comments on active sprint tickets",
             "source": "./sprint-report-gen"
