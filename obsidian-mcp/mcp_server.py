@@ -343,6 +343,39 @@ async def list_tools() -> list[Tool]:
             }
         ),
 
+        # ========== Metadata ==========
+        Tool(
+            name="obsidian_update_frontmatter",
+            description="Update specific fields in a note's YAML frontmatter without modifying the body. Creates frontmatter block if none exists. Set a value to null to remove that field.",
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "path": {"type": "string", "description": "Note path relative to vault root"},
+                    "fields": {
+                        "type": "object",
+                        "description": "Key-value pairs to set in frontmatter. Use null to delete a field."
+                    }
+                },
+                "required": ["path", "fields"]
+            }
+        ),
+        Tool(
+            name="obsidian_get_note_sections",
+            description="Parse a note into its heading-delimited sections. Returns each section's heading level, title, line range, and optionally its content. Useful for understanding note structure.",
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "path": {"type": "string", "description": "Note path relative to vault root"},
+                    "include_content": {
+                        "type": "boolean",
+                        "description": "Include each section's body text in the response (default: true)",
+                        "default": True
+                    }
+                },
+                "required": ["path"]
+            }
+        ),
+
         # ========== Directories ==========
         Tool(
             name="obsidian_create_directory",
@@ -765,6 +798,33 @@ async def call_tool(name: str, arguments: dict[str, Any]) -> list[TextContent]:
                 else:
                     result = f"None of the specified tags were found on {note_path}"
 
+        elif name == "obsidian_update_frontmatter":
+            note_path = ensure_md_extension(arguments["path"])
+            full_path = safe_path(note_path)
+            if not full_path.exists():
+                result = f"Note not found: {note_path}"
+            else:
+                content = full_path.read_text(encoding="utf-8")
+                fm, body = parse_frontmatter(content)
+                fields = arguments["fields"]
+                updated = []
+                removed = []
+                for key, value in fields.items():
+                    if value is None:
+                        if key in fm:
+                            fm.pop(key)
+                            removed.append(key)
+                    else:
+                        fm[key] = value
+                        updated.append(f"{key}={value}")
+                full_path.write_text(serialize_frontmatter(fm, body), encoding="utf-8")
+                parts = []
+                if updated:
+                    parts.append(f"Updated: {', '.join(updated)}")
+                if removed:
+                    parts.append(f"Removed: {', '.join(removed)}")
+                result = f"Frontmatter updated for {note_path}. {'; '.join(parts)}" if parts else f"No changes made to {note_path}"
+
         elif name == "obsidian_list_tags":
             vault = get_vault_path()
             tag_counts: dict[str, int] = {}
@@ -1115,6 +1175,58 @@ async def call_tool(name: str, arguments: dict[str, Any]) -> list[TextContent]:
 
                 result = "\n".join(meta)
 
+        elif name == "obsidian_get_note_sections":
+            note_path = ensure_md_extension(arguments["path"])
+            full_path = safe_path(note_path)
+            if not full_path.exists():
+                result = f"Note not found: {note_path}"
+            else:
+                content = full_path.read_text(encoding="utf-8")
+                include_content = arguments.get("include_content", True)
+                _, body = parse_frontmatter(content)
+                lines = body.split("\n")
+
+                sections = []
+                current_section = {"level": 0, "title": "(preamble)", "start_line": 1, "lines": []}
+
+                for i, line in enumerate(lines):
+                    heading_match = re.match(r'^(#{1,6})\s+(.+)', line)
+                    if heading_match:
+                        # Close previous section
+                        current_section["end_line"] = i
+                        if include_content:
+                            current_section["content"] = "\n".join(current_section["lines"]).strip()
+                        del current_section["lines"]
+                        if current_section.get("content") or current_section["level"] > 0:
+                            sections.append(current_section)
+
+                        # Start new section
+                        level = len(heading_match.group(1))
+                        title = heading_match.group(2).strip()
+                        current_section = {"level": level, "title": title, "start_line": i + 1, "lines": []}
+                    else:
+                        current_section["lines"].append(line)
+
+                # Close last section
+                current_section["end_line"] = len(lines)
+                if include_content:
+                    current_section["content"] = "\n".join(current_section["lines"]).strip()
+                del current_section["lines"]
+                sections.append(current_section)
+
+                output = [f"# Sections in {note_path} ({len(sections)} sections)\n"]
+                for s in sections:
+                    prefix = "#" * s["level"] + " " if s["level"] > 0 else ""
+                    output.append(f"### {prefix}{s['title']} (lines {s['start_line']}-{s['end_line']})")
+                    if include_content and s.get("content"):
+                        content_preview = s["content"][:500]
+                        if len(s["content"]) > 500:
+                            content_preview += f"\n... ({len(s['content'])} chars total)"
+                        output.append(content_preview)
+                    output.append("")
+
+                result = "\n".join(output)
+
         # ========== Excalidraw ==========
         elif name == "obsidian_list_drawings":
             vault = get_vault_path()
@@ -1156,7 +1268,7 @@ async def call_tool(name: str, arguments: dict[str, Any]) -> list[TextContent]:
                 })
 
             # Pass 3: .md files with excalidraw frontmatter (not already caught by .excalidraw.md)
-            excalidraw_dir = vault / "Excalidraw"
+            excalidraw_dir = vault / "excalidraw"
             if excalidraw_dir.is_dir():
                 for f in excalidraw_dir.rglob("*.md"):
                     if f.name.endswith(".excalidraw.md"):

@@ -24,7 +24,7 @@ pip install -r requirements.txt
 |----------|-------------|
 | `OBSIDIAN_VAULT_PATH` | Absolute path to the Obsidian vault directory (required) |
 
-## Available Tools (18)
+## Available Tools (21)
 
 ### Notes
 | Tool | Description |
@@ -64,6 +64,8 @@ pip install -r requirements.txt
 |------|-------------|
 | `obsidian_dataview_query` | Query notes by tags, folder, frontmatter fields |
 | `obsidian_get_note_metadata` | Get full metadata for a note |
+| `obsidian_update_frontmatter` | Update specific frontmatter fields without touching the note body |
+| `obsidian_get_note_sections` | Parse a note into heading-delimited sections with content |
 
 ### Directories
 | Tool | Description |
@@ -77,9 +79,34 @@ pip install -r requirements.txt
 | `obsidian_read_drawing` | Read drawing JSON (handles compressed .excalidraw.md) |
 | `obsidian_save_drawing` | Save Excalidraw JSON to the vault |
 
+## Knowledge Sync Agent
+
+Agent definition at `agents/knowledge-sync.md`. Syncs knowledge from Claude conversations
+into the Obsidian vault using a "Knowledge PR" review model.
+
+### How It Works
+1. User triggers sync (e.g., "sync to vault", "save these learnings to Obsidian")
+2. Agent asks for scope (current conversation, specific topics, etc.)
+3. Extracts concepts with intelligent tags, searches vault for related notes
+4. Generates "Knowledge PRs" — proposed changes shown as diffs
+5. User reviews and approves each change
+6. Agent applies approved changes, updates cross-links, and proposes diagrams where helpful
+7. Evaluates whether accumulated knowledge warrants a paper candidate in `papers/`
+
+### Two Merge Modes
+- **Style-Preserving**: Appends/inserts matching the note's existing style
+- **Refactor-While-Merging**: Proposes a clean rewrite when the note is messy
+
+### Key Features
+- **Intelligent tagging**: Aligns with vault's existing tag taxonomy for discoverability
+- **Diagrams**: Proposes Mermaid (inline) or Excalidraw diagrams for visual concepts
+- **Paper candidates**: Identifies publishable topics in `papers/` as depth accumulates across sessions
+- Agent NEVER writes to vault without user approval
+
 ## Key Files
 
-- `mcp_server.py` - MCP server (18 tools, single file)
+- `mcp_server.py` - MCP server (21 tools, single file)
+- `agents/knowledge-sync.md` - Knowledge Sync agent definition
 - `mcp-servers.json` - MCP server configuration
 - `requirements.txt` - Python dependencies (mcp, pyyaml, lzstring)
 
