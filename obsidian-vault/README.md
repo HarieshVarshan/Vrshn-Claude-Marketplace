@@ -14,20 +14,6 @@ Capture knowledge from Claude Code sessions into your Obsidian vault. Searches f
 
 ## How to Use
 
-### Natural Language (Auto-Trigger)
-
-Say any of these during a conversation:
-
-```
-"add this to obsidian"
-"save to vault"
-"capture this"
-"update my notes"
-"sync to obsidian"
-```
-
-The skill auto-triggers, extracts knowledge, searches the vault, and either handles simple additions directly or launches the full sync workflow.
-
 ### /capture Command
 
 ```
@@ -36,16 +22,7 @@ The skill auto-triggers, extracts knowledge, searches the vault, and either hand
 /capture DMA architecture   # Focus on DMA architecture
 ```
 
-### Full Vault Sync
-
-For reorganizing notes, syncing a long session, or working across multiple notes:
-
-```
-"do a full vault sync"
-"reorganize my DMA notes"
-```
-
-This launches the knowledge-sync agent with the full 10-step workflow.
+The command extracts knowledge, searches the vault, and either handles simple additions directly or launches the full knowledge-sync agent for complex operations.
 
 ## How It Works
 
@@ -62,15 +39,15 @@ Nothing is written without your explicit approval.
 
 ## Configuration
 
-The vault path is configured in the skill and agent files:
+The vault path is configured in the command and agent files:
 
 ```
 /home/harieshvarshan/vrshn_obsidian/
 ```
 
 To use with a different vault, update the path in:
-- `skills/context-capture/SKILL.md`
-- `skills/context-capture/references/vault-conventions.md`
+- `commands/capture.md`
+- `references/vault-conventions.md`
 - `agents/knowledge-sync.md`
 
 ## Installation
@@ -96,16 +73,13 @@ claude --plugin-dir /path/to/obsidian-vault
 ```
 obsidian-vault/
 ├── .claude-plugin/
-│   └── plugin.json                        # Plugin manifest
+│   └── plugin.json                  # Plugin manifest
 ├── commands/
-│   └── capture.md                         # /capture slash command
-├── skills/
-│   └── context-capture/
-│       ├── SKILL.md                       # Auto-trigger entry point
-│       └── references/
-│           └── vault-conventions.md       # Tag taxonomy, naming, hub structure
+│   └── capture.md                   # /capture — entry point, simple captures
+├── references/
+│   └── vault-conventions.md         # Tag taxonomy, naming, hub structure
 ├── agents/
-│   └── knowledge-sync.md                  # 10-step Knowledge PR workflow
-├── CLAUDE.md                              # Plugin development guide
-└── README.md                              # This file
+│   └── knowledge-sync.md            # 10-step Knowledge PR workflow
+├── CLAUDE.md                        # Plugin development guide
+└── README.md                        # This file
 ```
