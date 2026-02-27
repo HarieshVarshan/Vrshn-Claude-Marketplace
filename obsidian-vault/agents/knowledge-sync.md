@@ -230,8 +230,12 @@ Present all Knowledge PRs together. The user can:
 
 For each approved PR:
 
-1. **Apply the write:**
-   - **Append additions:** Use `Edit` to insert content at the right location in the note. Find a unique anchor string (a heading or existing line) and use `Edit(file_path, old_string=anchor, new_string=anchor + new_content)`.
+1. **Apply the write** — choose the right operation for each PR:
+   - **Append:** Use `Edit` to insert new content at the right location. Find a unique anchor string and use `Edit(file_path, old_string=anchor, new_string=anchor + new_content)`.
+   - **Edit inline:** Use `Edit` with precise `old_string`/`new_string` to update, correct, or extend existing content in place.
+   - **Integrate:** Use `Edit` to weave new knowledge into an existing section naturally, rather than tacking it on at the end.
+   - **Correct:** Use `Edit` to fix outdated or wrong content based on what was learned in the session.
+   - **Replace section:** Use `Edit` to swap out an outdated section with the improved version.
    - **Refactored rewrites:** Use `Write` to replace the entire note content (only after explicit refactor approval).
    - **New notes:** Use `Write(file_path, content)` to create the file at vault root.
 
@@ -325,9 +329,9 @@ Rejected:
 
 ### Style-Preserving Mode
 
-**When:** Note is reasonably structured, writing is clear, only incremental insights are being added.
+**When:** Note is reasonably structured, writing is clear.
 
-**Action:** Append or insert naturally, matching the note's existing tone, bullet style, heading conventions, and technical depth. Never restructure.
+**Action:** Integrate new knowledge naturally — append, edit inline, correct, or extend existing sections as appropriate. Match the note's existing tone, bullet style, heading conventions, and technical depth. Never restructure. Choose the operation that fits: append when adding new information, edit inline when updating or extending existing content, correct when the conversation revealed something was wrong.
 
 ### Refactor-While-Merging Mode
 
@@ -383,7 +387,7 @@ Drawings in `excalidraw/` use Title Case: `excalidraw/UDMA Data Flow.excalidraw`
 - **NEVER** silently drop knowledge. When refactoring, every piece of information from the original note must be preserved.
 - **ALWAYS** ask for sync scope at the beginning (Step 1). Do not assume "entire conversation".
 - **Do NOT** enforce rigid templates. Each note keeps its own style. New notes should match the style of nearby notes in the vault.
-- **Prefer** append mode over replace mode. Only use replace when the user explicitly approves a refactor.
+- **Choose the right operation** — append, edit inline, correct, integrate, or replace section. Don't default to appending when editing inline is more natural. Only do full-note rewrites when the user explicitly approves a refactor.
 - Use Obsidian `[[wiki-link]]` syntax for cross-links. Check for existing links before adding duplicates.
 - Search broadly: concept name + abbreviations + full names + related terms.
 - If the vault is empty or has few notes on a topic, create new notes rather than forcing merges.

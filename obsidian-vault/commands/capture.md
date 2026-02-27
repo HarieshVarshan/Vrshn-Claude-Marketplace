@@ -69,15 +69,12 @@ Search broadly: try the concept name, abbreviations, full forms, and related ter
 Based on extraction and search results, classify the capture:
 
 **Simple capture** (handle directly):
-- Adding 1-3 bullet points to an existing note
-- Appending a small section to a well-structured note
-- Creating a short new note (under ~30 lines) with clear scope
-- Adding tags or cross-links to an existing note
+- A single note needs a focused change (append, edit, correct, or create)
+- The change is straightforward and self-contained
 
 **Complex capture** (delegate to knowledge-sync agent):
 - Multiple notes need updating
 - Existing note is messy and needs refactoring alongside new content
-- New note requires careful style matching with related notes
 - Cross-linking across 3+ notes
 - Paper candidate evaluation needed
 - Diagram creation (Mermaid or Excalidraw)
@@ -87,55 +84,42 @@ Based on extraction and search results, classify the capture:
 
 ### Simple Capture Path
 
-1. **Read** the target note if appending to existing.
+1. **Read** the target note (if modifying an existing note). Understand its structure, style, and existing content.
 
-2. **Show preview** to the user. Present exactly what will be written:
+2. **Determine the right operation.** This is NOT always appending — understand the context and choose accordingly:
+   - **Append** — new information that extends what's already there (new bullet, new section)
+   - **Edit inline** — existing content is incomplete, outdated, or slightly wrong and needs updating in place
+   - **Correct** — the conversation revealed a misunderstanding captured in the note; fix it
+   - **Integrate** — the new knowledge fits naturally within an existing section rather than tacked on at the end
+   - **Replace section** — a section is outdated and the conversation produced a better version
+   - **New note** — the topic doesn't exist in the vault yet
+   - **Add cross-links/tags** — the note exists and is fine, just needs linking or tagging
 
-   For appending to an existing note:
+3. **Show preview** to the user. Present exactly what will change:
+
    ```
    ## Proposed change: {Note Name}.md
 
-   **Mode:** Append to section "{Section Name}"
+   **Operation:** {Append / Edit / Correct / Integrate / Replace section / New note}
+   **Why:** {brief reason — e.g., "conversation clarified that X actually works differently"}
 
-   Content to add:
-   > - New bullet point about X
-   > - Another finding about Y
+   {Show the specific change — diff-style for edits/corrections, full content for new notes}
 
-   Tags to add: #tag1, #tag2
-
-   Approve? (yes / edit / reject)
-   ```
-
-   For a new note:
-   ```
-   ## Proposed new note: {Note Name}.md
-
-   Content:
-   > # {Title}
-   >
-   > {body content}
-   >
-   > ## Related
-   > - [[Existing Note 1]]
-   > - [[Existing Note 2]]
-   >
-   > #tag1 #tag2
-
-   Also add [[{Note Name}]] to: {hub or related note}
+   Tags to add: #tag1, #tag2 (if any)
+   Cross-links to add: [[Note A]], [[Note B]] (if any)
 
    Approve? (yes / edit / reject)
    ```
 
-3. **Wait for explicit approval.** Never write without it.
+4. **Wait for explicit approval.** Never write without it.
 
-4. **Apply** the approved change:
-   - Append: use `Edit` to insert content at the right location
-   - New note: use `Write` to create the file
-   - Tags: use `Edit` to add tags at the bottom of the note
-   - Cross-links: use `Edit` to add `[[wiki-links]]` in related notes
-   - Hub update: use `Edit` to add the link in the appropriate hub section
+5. **Apply** the approved change using the appropriate tool:
+   - Inline edits, corrections, integrations: use `Edit` with precise old_string/new_string
+   - New notes: use `Write` to create the file
+   - Tag/link additions: use `Edit`
+   - Hub updates: use `Edit` to add the link in the appropriate hub section
 
-5. **Confirm** what was written.
+6. **Confirm** what was written.
 
 ### Complex Capture Path
 
@@ -171,4 +155,4 @@ Include a summary of extracted knowledge in the prompt so the agent has context.
 - **Adopt existing tags** — search the vault's tag taxonomy before creating new tags
 - Notes are concise references, not elaborate documents — capture what's essential for future use
 - Don't create notes for trivial or ephemeral content
-- If the conversation is about a topic already covered by a note, prefer appending over creating new
+- If a relevant note exists, integrate knowledge into it (edit, correct, append, etc.) rather than creating a duplicate note
