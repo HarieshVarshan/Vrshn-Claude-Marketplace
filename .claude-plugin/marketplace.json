@@ -44,6 +44,11 @@
             "name": "sprint-report-gen",
             "description": "Agent that generates sprint status reports from latest Jira comments on active sprint tickets",
             "source": "./sprint-report-gen"
+        },
+        {
+            "name": "obsidian-vault",
+            "description": "Capture knowledge from Claude sessions into Obsidian vault with intelligent deduplication and cross-linking",
+            "source": "./obsidian-vault"
         }
     ]
 }

@@ -1,0 +1,10 @@
+{
+    "name": "obsidian-vault",
+    "description": "Capture knowledge from Claude sessions into Obsidian vault with intelligent search, deduplication, cross-linking, and paper candidate tracking",
+    "version": "1.0.0",
+    "author": {
+        "name": "Harieshvarshan",
+        "email": "harieshvarshan@example.com"
+    },
+    "keywords": ["obsidian", "notes", "knowledge-base", "vault", "context-capture"]
+}
