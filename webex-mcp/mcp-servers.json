@@ -1,0 +1,12 @@
+{
+    "mcpServers": {
+        "webex": {
+            "type": "stdio",
+            "command": "${HOME}/.local/share/webex-mcp/venv/bin/python",
+            "args": ["${CLAUDE_PLUGIN_ROOT}/mcp_server.py"],
+            "env": {
+                "WEBEX_CONFIG": "${HOME}/.config/atlassian/.env"
+            }
+        }
+    }
+}
