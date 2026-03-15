@@ -1,0 +1,12 @@
+{
+    "mcpServers": {
+        "email": {
+            "type": "stdio",
+            "command": "${HOME}/.local/share/email-mcp/venv/bin/python",
+            "args": ["${CLAUDE_PLUGIN_ROOT}/mcp_server.py"],
+            "env": {
+                "EMAIL_CONFIG": "${HOME}/.config/atlassian/.env"
+            }
+        }
+    }
+}
