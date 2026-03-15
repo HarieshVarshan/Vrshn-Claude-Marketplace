@@ -9,6 +9,8 @@ Environment Variables:
     CONFLUENCE_CONFIG - Path to .env file (default: ~/.config/confluence-mcp/.env)
 """
 
+import json
+import os
 import traceback
 from typing import Any
 
@@ -17,13 +19,39 @@ from mcp.server.stdio import stdio_server
 from mcp.types import Tool, TextContent
 
 from confluence_client import get_confluence_client
+from confluence_converter import (
+    confluence_xhtml_to_markdown,
+    is_xhtml_content,
+    markdown_to_confluence_xhtml,
+)
+from confluence_errors import classify_error, cleanup_old_logs, log_error
+from confluence_file_io import (
+    read_content_from_file,
+    save_page_to_directory,
+    save_page_to_file,
+)
 
 # Create the MCP server
 server = Server("confluence")
 
 
+def _convert_content_for_storage(content: str) -> str:
+    """Auto-detect Markdown vs XHTML and convert to Confluence storage format if needed."""
+    if is_xhtml_content(content):
+        return content
+    return markdown_to_confluence_xhtml(content)
+
+
+def _xhtml_to_markdown_safe(xhtml: str) -> str:
+    """Convert XHTML to Markdown, returning raw XHTML on failure."""
+    try:
+        return confluence_xhtml_to_markdown(xhtml)
+    except Exception:
+        return xhtml
+
+
 def format_page(page: dict) -> str:
-    """Format a Confluence page for display."""
+    """Format a Confluence page for display, converting XHTML content to Markdown."""
     output = []
     output.append(f"# {page.get('title', 'Untitled')}")
     output.append("")
@@ -39,7 +67,8 @@ def format_page(page: dict) -> str:
     output.append("")
     output.append("## Content")
     body = page.get('body', {})
-    content = body.get('view', {}).get('value') or body.get('storage', {}).get('value') or 'No content'
+    raw_content = body.get('view', {}).get('value') or body.get('storage', {}).get('value') or 'No content'
+    content = _xhtml_to_markdown_safe(raw_content) if raw_content != 'No content' else raw_content
     output.append(content)
 
     return '\n'.join(output)
@@ -56,6 +85,55 @@ def format_pages_list(pages: list, title: str = "Pages") -> str:
     return '\n'.join(output)
 
 
+def _build_page_metadata(page: dict, base_url: str) -> dict:
+    """Extract metadata dict from a page response for file I/O front matter."""
+    page_id = page.get('id')
+    return {
+        'page_id': page_id,
+        'space': page.get('space', {}).get('key', ''),
+        'version': page.get('version', {}).get('number'),
+        'url': f"{base_url}/pages/viewpage.action?pageId={page_id}",
+        'last_modified': page.get('version', {}).get('when', ''),
+    }
+
+
+def _handle_page_save(page: dict, arguments: dict, client) -> str:
+    """Handle save_to_file / save_to_dir for get_page and get_page_by_title tools.
+
+    Returns additional output text about the save operation, or empty string.
+    """
+    extra = ''
+    body = page.get('body', {})
+    raw_content = body.get('storage', {}).get('value') or body.get('view', {}).get('value') or ''
+    md_content = _xhtml_to_markdown_safe(raw_content) if raw_content else ''
+    title = page.get('title', 'Untitled')
+    metadata = _build_page_metadata(page, client.base_url)
+
+    if arguments.get('save_to_file'):
+        saved = save_page_to_file(arguments['save_to_file'], title, md_content, metadata)
+        extra += f"\n\nSaved to: `{saved}`"
+
+    if arguments.get('save_to_dir'):
+        saved = save_page_to_directory(arguments['save_to_dir'], title, md_content, metadata)
+        extra += f"\n\nSaved to directory: `{os.path.dirname(saved)}`"
+        # Download attachments into attachments/ subdir
+        try:
+            attachments = client.get_page_attachments(page.get('id'), limit=100)
+            att_dir = os.path.join(os.path.dirname(saved), 'attachments')
+            for att in attachments.get('results', []):
+                att_title = att.get('title', 'unknown')
+                att_path = os.path.join(att_dir, att_title)
+                try:
+                    client.download_attachment(att.get('id'), att_path)
+                    extra += f"\n  - Downloaded: `{att_title}`"
+                except Exception:
+                    extra += f"\n  - Failed to download: `{att_title}`"
+        except Exception:
+            pass
+
+    return extra
+
+
 @server.list_tools()
 async def list_tools() -> list[Tool]:
     """List all available Confluence tools."""
@@ -63,52 +141,58 @@ async def list_tools() -> list[Tool]:
         # ========== Pages ==========
         Tool(
             name="confluence_get_page",
-            description="Get a Confluence page by ID or URL.",
+            description="Get a Confluence page by ID or URL. Returns content as Markdown.",
             inputSchema={
                 "type": "object",
                 "properties": {
-                    "page_id": {"type": "string", "description": "Page ID or full Confluence URL"}
+                    "page_id": {"type": "string", "description": "Page ID or full Confluence URL"},
+                    "save_to_file": {"type": "string", "description": "Optional local file path to save page as Markdown"},
+                    "save_to_dir": {"type": "string", "description": "Optional local directory path to save page as index.md + attachments/"}
                 },
                 "required": ["page_id"]
             }
         ),
         Tool(
             name="confluence_get_page_by_title",
-            description="Get a Confluence page by space key and title.",
+            description="Get a Confluence page by space key and title. Returns content as Markdown.",
             inputSchema={
                 "type": "object",
                 "properties": {
                     "space_key": {"type": "string", "description": "Space key (e.g., DOCS)"},
-                    "title": {"type": "string", "description": "Exact page title"}
+                    "title": {"type": "string", "description": "Exact page title"},
+                    "save_to_file": {"type": "string", "description": "Optional local file path to save page as Markdown"},
+                    "save_to_dir": {"type": "string", "description": "Optional local directory path to save page as index.md + attachments/"}
                 },
                 "required": ["space_key", "title"]
             }
         ),
         Tool(
             name="confluence_create_page",
-            description="Create a new Confluence page. Content in Confluence storage format (XHTML).",
+            description="Create a new Confluence page. Content can be Markdown (auto-converted) or XHTML. Optionally read content from a local file.",
             inputSchema={
                 "type": "object",
                 "properties": {
                     "space_key": {"type": "string", "description": "Space key"},
                     "title": {"type": "string", "description": "Page title"},
-                    "content": {"type": "string", "description": "Page content in XHTML"},
+                    "content": {"type": "string", "description": "Page content in Markdown or XHTML (optional if file_path provided)"},
+                    "file_path": {"type": "string", "description": "Local file path to read content from (Markdown or XHTML)"},
                     "parent_id": {"type": "string", "description": "Optional parent page ID"}
                 },
-                "required": ["space_key", "title", "content"]
+                "required": ["space_key", "title"]
             }
         ),
         Tool(
             name="confluence_update_page",
-            description="Update an existing Confluence page.",
+            description="Update an existing Confluence page. Content can be Markdown (auto-converted) or XHTML. Optionally read content from a local file.",
             inputSchema={
                 "type": "object",
                 "properties": {
                     "page_id": {"type": "string", "description": "Page ID"},
                     "title": {"type": "string", "description": "New title"},
-                    "content": {"type": "string", "description": "New content in XHTML"}
+                    "content": {"type": "string", "description": "New content in Markdown or XHTML (optional if file_path provided)"},
+                    "file_path": {"type": "string", "description": "Local file path to read content from (Markdown or XHTML)"}
                 },
-                "required": ["page_id", "title", "content"]
+                "required": ["page_id", "title"]
             }
         ),
         Tool(
@@ -502,6 +586,63 @@ async def list_tools() -> list[Tool]:
             }
         ),
 
+        # ========== Watch ==========
+        Tool(
+            name="confluence_is_watching_content",
+            description="Check if the current user is watching a piece of content.",
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "content_id": {"type": "string", "description": "Content ID (page, blog post, etc.)"}
+                },
+                "required": ["content_id"]
+            }
+        ),
+        Tool(
+            name="confluence_watch_content",
+            description="Start watching a piece of content (page, blog post, etc.).",
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "content_id": {"type": "string", "description": "Content ID to watch"}
+                },
+                "required": ["content_id"]
+            }
+        ),
+        Tool(
+            name="confluence_unwatch_content",
+            description="Stop watching a piece of content.",
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "content_id": {"type": "string", "description": "Content ID to unwatch"}
+                },
+                "required": ["content_id"]
+            }
+        ),
+        Tool(
+            name="confluence_watch_space",
+            description="Start watching a space.",
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "space_key": {"type": "string", "description": "Space key to watch"}
+                },
+                "required": ["space_key"]
+            }
+        ),
+        Tool(
+            name="confluence_unwatch_space",
+            description="Stop watching a space.",
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "space_key": {"type": "string", "description": "Space key to unwatch"}
+                },
+                "required": ["space_key"]
+            }
+        ),
+
         # ========== Raw API ==========
         Tool(
             name="confluence_raw_api",
@@ -531,6 +672,7 @@ async def call_tool(name: str, arguments: dict[str, Any]) -> list[TextContent]:
         if name == "confluence_get_page":
             page = client.get_page(arguments["page_id"])
             result = format_page(page)
+            result += _handle_page_save(page, arguments, client)
 
         elif name == "confluence_get_page_by_title":
             response = client.get_page_by_title(arguments["space_key"], arguments["title"])
@@ -540,12 +682,20 @@ async def call_tool(name: str, arguments: dict[str, Any]) -> list[TextContent]:
             else:
                 page = client.get_page(pages[0]['id'])
                 result = format_page(page)
+                result += _handle_page_save(page, arguments, client)
 
         elif name == "confluence_create_page":
+            # Resolve content from file_path or content param
+            content = arguments.get("content", "")
+            if arguments.get("file_path"):
+                content = read_content_from_file(arguments["file_path"])
+            if not content:
+                return [TextContent(type="text", text="Error: Either 'content' or 'file_path' must be provided.")]
+            content = _convert_content_for_storage(content)
             created = client.create_page(
                 space_key=arguments["space_key"],
                 title=arguments["title"],
-                content=arguments["content"],
+                content=content,
                 parent_id=arguments.get("parent_id")
             )
             page_id = created.get('id')
@@ -553,10 +703,17 @@ async def call_tool(name: str, arguments: dict[str, Any]) -> list[TextContent]:
             result = f"Page created: **{arguments['title']}**\nID: {page_id}\nURL: {page_url}"
 
         elif name == "confluence_update_page":
+            # Resolve content from file_path or content param
+            content = arguments.get("content", "")
+            if arguments.get("file_path"):
+                content = read_content_from_file(arguments["file_path"])
+            if not content:
+                return [TextContent(type="text", text="Error: Either 'content' or 'file_path' must be provided.")]
+            content = _convert_content_for_storage(content)
             updated = client.update_page(
                 page_id=arguments["page_id"],
                 title=arguments["title"],
-                content=arguments["content"]
+                content=content
             )
             version = updated.get('version', {}).get('number', 'unknown')
             result = f"Page updated: **{arguments['title']}**\nNew version: {version}"
@@ -589,7 +746,6 @@ async def call_tool(name: str, arguments: dict[str, Any]) -> list[TextContent]:
             spaces = client.get_all_spaces(arguments.get("limit", 50))
             output = [f"# Spaces ({len(spaces.get('results', []))} found)\n"]
             for space in spaces.get('results', []):
-                desc = space.get('description', {}).get('plain', {}).get('value', 'N/A')
                 output.append(f"- **{space.get('key')}**: {space.get('name', 'Unknown')}")
             result = '\n'.join(output)
 
@@ -625,8 +781,8 @@ async def call_tool(name: str, arguments: dict[str, Any]) -> list[TextContent]:
         elif name == "confluence_get_page_labels":
             labels = client.get_page_labels(arguments["page_id"])
             output = [f"# Labels ({len(labels)} found)\n"]
-            for l in labels:
-                output.append(f"- {l.get('name', 'Unknown')}")
+            for label in labels:
+                output.append(f"- {label.get('name', 'Unknown')}")
             result = '\n'.join(output)
 
         elif name == "confluence_add_page_label":
@@ -676,9 +832,10 @@ async def call_tool(name: str, arguments: dict[str, Any]) -> list[TextContent]:
                 output.append(f"**Message:** {version.get('message')}")
             content = version.get('content', {})
             if content:
-                body = content.get('body', {}).get('storage', {}).get('value', 'No content')
+                raw_body = content.get('body', {}).get('storage', {}).get('value', 'No content')
+                md_body = _xhtml_to_markdown_safe(raw_body) if raw_body != 'No content' else raw_body
                 output.append("\n## Content")
-                output.append(body)
+                output.append(md_body)
             result = '\n'.join(output)
 
         # ========== Page Move/Copy ==========
@@ -823,6 +980,28 @@ async def call_tool(name: str, arguments: dict[str, Any]) -> list[TextContent]:
             output.append(f"**Type:** {user.get('type', 'Unknown')}")
             result = '\n'.join(output)
 
+        # ========== Watch ==========
+        elif name == "confluence_is_watching_content":
+            watching = client.is_watching_content(arguments["content_id"])
+            status = "watching" if watching else "not watching"
+            result = f"You are **{status}** content {arguments['content_id']}."
+
+        elif name == "confluence_watch_content":
+            client.watch_content(arguments["content_id"])
+            result = f"Now watching content {arguments['content_id']}."
+
+        elif name == "confluence_unwatch_content":
+            client.unwatch_content(arguments["content_id"])
+            result = f"Stopped watching content {arguments['content_id']}."
+
+        elif name == "confluence_watch_space":
+            client.watch_space(arguments["space_key"])
+            result = f"Now watching space {arguments['space_key']}."
+
+        elif name == "confluence_unwatch_space":
+            client.unwatch_space(arguments["space_key"])
+            result = f"Stopped watching space {arguments['space_key']}."
+
         # ========== Raw API ==========
         elif name == "confluence_raw_api":
             response = client.raw_api(
@@ -831,7 +1010,6 @@ async def call_tool(name: str, arguments: dict[str, Any]) -> list[TextContent]:
                 body=arguments.get("body"),
                 params=arguments.get("params")
             )
-            import json
             result = f"# Raw API Response\n\n```json\n{json.dumps(response, indent=2)}\n```"
 
         else:
@@ -840,12 +1018,16 @@ async def call_tool(name: str, arguments: dict[str, Any]) -> list[TextContent]:
         return [TextContent(type="text", text=result)]
 
     except Exception as e:
-        error_msg = f"Error executing {name}: {str(e)}\n{traceback.format_exc()}"
+        error = classify_error(name, e)
+        log_error(error)
+        error_msg = error.format_for_user()
+        error_msg += f"\n\n<details><summary>Traceback</summary>\n\n```\n{traceback.format_exc()}\n```\n</details>"
         return [TextContent(type="text", text=error_msg)]
 
 
 async def main():
     """Run the MCP server."""
+    cleanup_old_logs()
     async with stdio_server() as (read_stream, write_stream):
         await server.run(
             read_stream,

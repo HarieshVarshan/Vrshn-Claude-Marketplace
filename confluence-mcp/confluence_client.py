@@ -574,6 +574,39 @@ class ConfluenceClient:
         response.raise_for_status()
         return response.json()
 
+    # ==================== Watch ====================
+
+    def is_watching_content(self, content_id: str) -> bool:
+        """Check if the current user is watching a piece of content."""
+        url = f"{self.base_url}/rest/api/user/watch/content/{content_id}"
+        response = self.session.get(url)
+        response.raise_for_status()
+        return response.json().get('watching', False)
+
+    def watch_content(self, content_id: str) -> None:
+        """Start watching a piece of content (page, blog post, etc.)."""
+        url = f"{self.base_url}/rest/api/user/watch/content/{content_id}"
+        response = self.session.post(url)
+        response.raise_for_status()
+
+    def unwatch_content(self, content_id: str) -> None:
+        """Stop watching a piece of content."""
+        url = f"{self.base_url}/rest/api/user/watch/content/{content_id}"
+        response = self.session.delete(url)
+        response.raise_for_status()
+
+    def watch_space(self, space_key: str) -> None:
+        """Start watching a space."""
+        url = f"{self.base_url}/rest/api/user/watch/space/{space_key}"
+        response = self.session.post(url)
+        response.raise_for_status()
+
+    def unwatch_space(self, space_key: str) -> None:
+        """Stop watching a space."""
+        url = f"{self.base_url}/rest/api/user/watch/space/{space_key}"
+        response = self.session.delete(url)
+        response.raise_for_status()
+
     # ==================== Raw API ====================
 
     def raw_api(self, method: str, endpoint: str,
