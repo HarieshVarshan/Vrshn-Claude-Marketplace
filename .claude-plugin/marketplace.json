@@ -49,6 +49,16 @@
             "name": "obsidian-vault",
             "description": "Capture knowledge from Claude sessions into Obsidian vault with intelligent deduplication and cross-linking",
             "source": "./obsidian-vault"
+        },
+        {
+            "name": "email-mcp",
+            "description": "MCP server for Email - send, read, search, and manage emails via IMAP/SMTP",
+            "source": "./email-mcp"
+        },
+        {
+            "name": "webex-mcp",
+            "description": "MCP server for Cisco Webex - messaging, teams, rooms, memberships, and webhooks",
+            "source": "./webex-mcp"
         }
     ]
 }
