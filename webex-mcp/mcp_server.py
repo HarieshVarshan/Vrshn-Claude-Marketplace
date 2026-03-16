@@ -41,7 +41,7 @@ def _format_person(p: dict) -> str:
 
 def _format_person_short(p: dict) -> str:
     email = p.get('emails', ['N/A'])[0] if p.get('emails') else 'N/A'
-    return f"- **{p.get('displayName', 'Unknown')}** ({email}) `{p.get('id', '')[:20]}...`"
+    return f"- **{p.get('displayName', 'Unknown')}** ({email}) `{p.get('id', '')}`"
 
 
 def _format_org(o: dict) -> str:
@@ -456,7 +456,7 @@ async def call_tool(name: str, arguments: dict[str, Any]) -> list[TextContent]:
             orgs = client.list_organizations()
             output = [f"# Organizations ({len(orgs)} found)\n"]
             for o in orgs:
-                output.append(f"- **{o.get('displayName', 'Unknown')}** `{o.get('id', '')[:20]}...`")
+                output.append(f"- **{o.get('displayName', 'Unknown')}** `{o.get('id', '')}`")
             result = '\n'.join(output)
 
         elif name == "webex_get_organization":
@@ -469,7 +469,7 @@ async def call_tool(name: str, arguments: dict[str, Any]) -> list[TextContent]:
             output = [f"# Teams ({len(teams)} found)\n"]
             for t in teams:
                 desc = f" - {t['description']}" if t.get('description') else ""
-                output.append(f"- **{t.get('name', 'Unknown')}**{desc} `{t.get('id', '')[:20]}...`")
+                output.append(f"- **{t.get('name', 'Unknown')}**{desc} `{t.get('id', '')}`")
             result = '\n'.join(output)
 
         elif name == "webex_create_team":
@@ -497,7 +497,7 @@ async def call_tool(name: str, arguments: dict[str, Any]) -> list[TextContent]:
             output = [f"# Rooms ({len(rooms)} found)\n"]
             for r in rooms:
                 rtype = f" [{r.get('type', '')}]" if r.get('type') else ""
-                output.append(f"- **{r.get('title', 'Untitled')}**{rtype} `{r.get('id', '')[:20]}...`")
+                output.append(f"- **{r.get('title', 'Untitled')}**{rtype} `{r.get('id', '')}`")
             result = '\n'.join(output)
 
         elif name == "webex_create_room":
@@ -529,7 +529,7 @@ async def call_tool(name: str, arguments: dict[str, Any]) -> list[TextContent]:
                 created = m.get('created', '')[:19]
                 text = (m.get('text') or m.get('markdown') or '(no text)')[:120]
                 output.append(f"- **{sender}** ({created}): {text}")
-                output.append(f"  ID: `{m.get('id', '')[:30]}...`")
+                output.append(f"  ID: `{m.get('id', '')}`")
             result = '\n'.join(output)
 
         elif name == "webex_create_message":
@@ -564,7 +564,7 @@ async def call_tool(name: str, arguments: dict[str, Any]) -> list[TextContent]:
             for mb in memberships:
                 mod = " [Moderator]" if mb.get('isModerator') else ""
                 output.append(f"- **{mb.get('personDisplayName', 'Unknown')}** ({mb.get('personEmail', 'N/A')}){mod}")
-                output.append(f"  ID: `{mb.get('id', '')[:30]}...`")
+                output.append(f"  ID: `{mb.get('id', '')}`")
             result = '\n'.join(output)
 
         elif name == "webex_create_membership":
@@ -590,7 +590,7 @@ async def call_tool(name: str, arguments: dict[str, Any]) -> list[TextContent]:
             output = [f"# Webhooks ({len(webhooks)} found)\n"]
             for w in webhooks:
                 output.append(f"- **{w.get('name', 'Untitled')}** ({w.get('resource', '')}/{w.get('event', '')}) [{w.get('status', '')}]")
-                output.append(f"  ID: `{w.get('id', '')[:30]}...`")
+                output.append(f"  ID: `{w.get('id', '')}`")
             result = '\n'.join(output)
 
         elif name == "webex_create_webhook":
