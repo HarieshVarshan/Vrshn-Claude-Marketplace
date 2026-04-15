@@ -68,19 +68,44 @@ Tag each ticket with which filter(s) it matched.
 
 ---
 
-## Phase 3: Decide What to Analyze
+## Phase 3: Decide What to Analyze (Max 5 Per Run)
 
-For each ticket, compute a **content hash**:
+**Default behaviour: analyze at most 5 tickets per invocation.** This is intentional —
+on day 1 you may have 500+ open tickets; analyzing all at once is impractical. Each run
+chips away at the backlog. Over several runs everything gets covered.
+
+### 3a. Compute content hash for each ticket
 ```
 hash = md5("{key}|{summary}|{status}|{type}|{priority}")[:8]
 ```
 
-Analyze a ticket if **any** of these are true:
-- It does not exist in `index.json`.
-- Its hash differs from the stored hash (ticket changed since last analysis).
-- `--force` was passed as an argument.
+### 3b. Build the candidate list
 
-If nothing needs analysis, print a summary and stop.
+A ticket is a **candidate** if **any** of these are true:
+- It does not exist in `index.json` (never analyzed).
+- Its hash differs from the stored hash (ticket changed since last run).
+- `--force` was passed as an argument (re-analyze regardless).
+
+Never include tickets with status `Done`, `Closed`, `Resolved`, `Implemented`, `Verified`, `IMPLEMENTED`.
+
+### 3c. Prioritize candidates
+
+Sort candidates by this priority order (descending):
+1. **Never analyzed** before already-analyzed-but-stale.
+2. **Higher Jira priority** first: Critical > High > Medium > Low.
+3. **More recently updated** (newer `updated` date first) within the same priority.
+
+### 3d. Cap at 5
+
+Take the **top 5** from the sorted candidate list. Discard the rest — they will be
+picked up in future runs.
+
+If there are 0 candidates, print:
+```
+Nothing to analyze — all tickets are up to date.
+Run with --force to re-analyze everything.
+```
+and stop.
 
 ---
 
@@ -288,14 +313,15 @@ Print a summary table:
 ```
 Jira Head Start — Analysis Complete
 =====================================
-Tickets analyzed:    X
-Tickets skipped:     Y (already up to date)
-Output directory:    ~/.local/share/jira-headstart/
+This run:   X analyzed  (cap: 5 per run)
+Backlog:    Y remaining unanalyzed
+Coverage:   Z / TOTAL tickets analyzed so far
 
-Analyzed:
-  PDK-XXXXX  [Medium]  MCUPSDK: j722s promotion logic    → Sources: Jira, LocalRepo, Bitbucket
-  PDK-YYYYY  [High]    UART DMA crash on tda54            → Sources: Jira, Confluence, LocalRepo
+Analyzed this run:
+  PDK-XXXXX  [High]    MCUPSDK: j722s promotion logic    → Sources: Jira, LocalRepo, Bitbucket
+  PDK-YYYYY  [Medium]  UART DMA crash on tda54            → Sources: Jira, Confluence, LocalRepo
 
+Run again to analyze the next 5 tickets in the backlog.
 Start the dashboard: cd <marketplace>/skills/jira-headstart/server && python server.py
 ```
 
@@ -308,7 +334,7 @@ Start the dashboard: cd <marketplace>/skills/jira-headstart/server && python ser
 - **Graceful degradation.** If a context source fails (repo not found, MCP error), log a warning and continue — don't abort the whole run.
 - **No hallucination.** Only state things you found in actual tool outputs. If a file path or API name is not confirmed by a tool result, don't include it.
 - **Hash-based skipping.** If a ticket's hash hasn't changed and an analysis file already exists, skip it (unless `--force`).
-- **Max 5 tickets per run** by default (most important by priority + recency). Add `--all` argument to process all.
+- **Hard cap of 5 per run.** Never exceed this. Use `--force` to re-analyze all, but still capped at 5 unless `--all` is explicitly passed.
 
 ---
 
