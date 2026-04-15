@@ -30,6 +30,7 @@ A collection of MCP (Model Context Protocol) server plugins for Claude Code.
 | Skill | Command | Description |
 |-------|---------|-------------|
 | [mira](./skills/mira/) | `/mira` | Smart Jira task manager for PDK sprints — hashtag-routed issue creation (#jira, #review, #bug, #chores, #meetings, #mira) |
+| [jira-headstart](./skills/jira-headstart/) | agent | Nightly deep-analysis of open Jira tickets — Jira + Bitbucket + Confluence + PDS + local repos → local markdown + dashboard at :7337 |
 
 ## Quick Start
 

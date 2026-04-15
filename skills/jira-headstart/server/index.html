@@ -1,0 +1,355 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Jira Head Start</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/dompurify@3/dist/purify.min.js"></script>
+  <style>
+    /* Markdown content styles */
+    .md-body h1 { font-size:1.5rem; font-weight:700; margin:1.25rem 0 .5rem; border-bottom:1px solid #e5e7eb; padding-bottom:.4rem; }
+    .md-body h2 { font-size:1.2rem; font-weight:600; margin:1.1rem 0 .4rem; color:#1d4ed8; }
+    .md-body h3 { font-size:1rem; font-weight:600; margin:.9rem 0 .3rem; }
+    .md-body p  { margin:.5rem 0; line-height:1.65; }
+    .md-body ul { list-style:disc; padding-left:1.5rem; margin:.4rem 0; }
+    .md-body ol { list-style:decimal; padding-left:1.5rem; margin:.4rem 0; }
+    .md-body li { margin:.2rem 0; }
+    .md-body table { border-collapse:collapse; width:100%; margin:.75rem 0; font-size:.85rem; }
+    .md-body th, .md-body td { border:1px solid #d1d5db; padding:.4rem .75rem; text-align:left; }
+    .md-body th { background:#f3f4f6; font-weight:600; }
+    .md-body code { background:#f1f5f9; padding:.1rem .3rem; border-radius:.25rem; font-size:.85em; font-family:monospace; }
+    .md-body pre { background:#1e293b; color:#e2e8f0; padding:1rem; border-radius:.5rem; overflow-x:auto; margin:.75rem 0; }
+    .md-body pre code { background:none; color:inherit; padding:0; }
+    .md-body a { color:#2563eb; text-decoration:underline; }
+    .md-body blockquote { border-left:3px solid #93c5fd; padding-left:1rem; color:#6b7280; margin:.5rem 0; }
+    .md-body hr { border:none; border-top:1px solid #e5e7eb; margin:1rem 0; }
+
+    /* Sidebar scrollbar */
+    #sidebar { scrollbar-width:thin; scrollbar-color:#d1d5db transparent; }
+
+    /* Issue row hover */
+    .issue-row { cursor:pointer; transition:background .1s; }
+    .issue-row:hover { background:#eff6ff; }
+    .issue-row.active { background:#dbeafe; border-left:3px solid #2563eb; }
+
+    /* Priority dots */
+    .prio-critical { color:#dc2626; }
+    .prio-high     { color:#ea580c; }
+    .prio-medium   { color:#ca8a04; }
+    .prio-low      { color:#16a34a; }
+
+    /* Analysis badge */
+    .badge-analyzed { background:#dcfce7; color:#15803d; }
+    .badge-stale    { background:#fef9c3; color:#854d0e; }
+    .badge-none     { background:#f3f4f6; color:#6b7280; }
+  </style>
+</head>
+<body class="bg-gray-50 h-screen flex flex-col text-sm font-sans">
+
+<!-- ── Top bar ─────────────────────────────────────────────────────────── -->
+<header class="bg-white border-b border-gray-200 px-4 py-2 flex items-center gap-4 flex-shrink-0">
+  <span class="font-bold text-blue-700 text-base tracking-tight">⚡ Jira Head Start</span>
+
+  <!-- Filter tabs -->
+  <nav id="filters" class="flex gap-1">
+    <button data-filter="all_open"       class="filter-btn px-3 py-1 rounded text-xs font-medium">All Open</button>
+    <button data-filter="external_bugs"  class="filter-btn px-3 py-1 rounded text-xs font-medium">External Bugs</button>
+    <button data-filter="internal_bugs"  class="filter-btn px-3 py-1 rounded text-xs font-medium">Internal Bugs</button>
+  </nav>
+
+  <!-- Search -->
+  <div class="flex-1 max-w-sm relative">
+    <input id="search-box" type="text" placeholder="Search Jira… (Enter for universal search)"
+      class="w-full border border-gray-300 rounded px-3 py-1 text-xs focus:outline-none focus:ring-1 focus:ring-blue-400">
+    <div id="search-results"
+      class="hidden absolute top-full left-0 w-full bg-white border border-gray-200 rounded shadow-lg z-50 max-h-72 overflow-y-auto">
+    </div>
+  </div>
+
+  <!-- Status bar -->
+  <div class="ml-auto text-xs text-gray-400 flex items-center gap-3">
+    <span id="last-run"></span>
+    <span id="ticket-count" class="bg-blue-50 text-blue-600 px-2 py-0.5 rounded font-medium"></span>
+    <button onclick="reload()" class="text-blue-500 hover:text-blue-700 font-medium">↻ Refresh</button>
+  </div>
+</header>
+
+<!-- ── Main layout ──────────────────────────────────────────────────────── -->
+<div class="flex flex-1 overflow-hidden">
+
+  <!-- Sidebar -->
+  <aside id="sidebar" class="w-72 border-r border-gray-200 bg-white overflow-y-auto flex-shrink-0">
+    <div id="issue-list" class="divide-y divide-gray-100"></div>
+  </aside>
+
+  <!-- Main panel -->
+  <main class="flex-1 overflow-y-auto p-6">
+    <div id="placeholder" class="flex flex-col items-center justify-center h-full text-gray-400">
+      <div class="text-5xl mb-4">⚡</div>
+      <p class="text-lg font-medium text-gray-500">Select a ticket to view analysis</p>
+      <p class="text-xs mt-1">Analysis files are stored in <code class="bg-gray-100 px-1 rounded">~/.local/share/jira-headstart/</code></p>
+    </div>
+    <div id="analysis-panel" class="hidden">
+      <div id="analysis-header" class="flex items-start justify-between mb-4"></div>
+      <div id="analysis-content" class="md-body bg-white rounded-lg border border-gray-200 p-5"></div>
+    </div>
+    <div id="no-analysis" class="hidden bg-amber-50 border border-amber-200 rounded-lg p-5">
+      <h3 class="font-semibold text-amber-800 mb-2">No analysis yet for <span id="no-analysis-key"></span></h3>
+      <p class="text-amber-700 text-xs mb-3">Run the jira-headstart agent to generate an analysis for this ticket.</p>
+      <pre class="bg-amber-100 text-amber-900 text-xs p-3 rounded">claude "run jira-headstart for <span id="no-analysis-key2"></span>"</pre>
+    </div>
+  </main>
+
+</div>
+
+<script>
+// ── State ──────────────────────────────────────────────────────────────────
+let activeFilter = 'all_open';
+let activeKey = null;
+let allIssues = [];
+
+// ── Helpers ────────────────────────────────────────────────────────────────
+const $ = id => document.getElementById(id);
+
+function priorityIcon(p) {
+  const map = { Critical:'🔴', High:'🟠', 'P1-Critical':'🔴', 'P2-High':'🟠',
+                'P3-Medium':'🟡', Medium:'🟡', 'P4-Low':'🟢', Low:'🟢' };
+  return map[p] || '⚪';
+}
+
+function analysisBadge(issue) {
+  if (issue.analyzed && issue.stale)
+    return `<span class="badge-stale text-xs px-1.5 py-0.5 rounded font-medium">stale</span>`;
+  if (issue.analyzed)
+    return `<span class="badge-analyzed text-xs px-1.5 py-0.5 rounded font-medium">✓</span>`;
+  return `<span class="badge-none text-xs px-1.5 py-0.5 rounded font-medium">–</span>`;
+}
+
+function typeColor(t) {
+  const map = { Bug:'text-red-600', Task:'text-blue-600', Story:'text-green-600',
+                Review:'text-purple-600', Requirement:'text-indigo-600' };
+  return map[t] || 'text-gray-600';
+}
+
+// ── Load issues ────────────────────────────────────────────────────────────
+async function loadIssues(filter) {
+  activeFilter = filter;
+  $('issue-list').innerHTML = '<div class="p-4 text-gray-400 text-xs">Loading…</div>';
+  clearMain();
+
+  // Update filter tab styles
+  document.querySelectorAll('.filter-btn').forEach(btn => {
+    const active = btn.dataset.filter === filter;
+    btn.className = `filter-btn px-3 py-1 rounded text-xs font-medium transition ` +
+      (active ? 'bg-blue-600 text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200');
+  });
+
+  try {
+    const res = await fetch(`/api/issues?filter=${filter}`);
+    const data = await res.json();
+    if (data.error) throw new Error(data.error);
+
+    allIssues = data.issues || [];
+    renderSidebar(allIssues);
+
+    $('ticket-count').textContent = `${allIssues.length} tickets`;
+    if (data.lastRun) {
+      const d = new Date(data.lastRun);
+      $('last-run').textContent = `Last analysis: ${d.toLocaleDateString()} ${d.toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'})}`;
+    } else {
+      $('last-run').textContent = 'Not yet analyzed';
+    }
+  } catch (e) {
+    $('issue-list').innerHTML = `<div class="p-4 text-red-500 text-xs">Error: ${e.message}</div>`;
+  }
+}
+
+function renderSidebar(issues) {
+  if (!issues.length) {
+    $('issue-list').innerHTML = '<div class="p-4 text-gray-400 text-xs">No tickets found.</div>';
+    return;
+  }
+  $('issue-list').innerHTML = issues.map(issue => `
+    <div class="issue-row px-3 py-2.5 ${issue.key === activeKey ? 'active' : ''}"
+         onclick="selectIssue('${issue.key}')" data-key="${issue.key}">
+      <div class="flex items-center justify-between gap-1">
+        <span class="font-mono text-xs text-gray-500">${issue.key}</span>
+        <div class="flex items-center gap-1">
+          <span>${priorityIcon(issue.priority)}</span>
+          ${analysisBadge(issue)}
+        </div>
+      </div>
+      <div class="text-xs font-medium text-gray-800 mt-0.5 leading-tight line-clamp-2">${escHtml(issue.summary)}</div>
+      <div class="flex items-center gap-1.5 mt-1">
+        <span class="text-xs ${typeColor(issue.type)}">${issue.type || ''}</span>
+        <span class="text-gray-300">·</span>
+        <span class="text-xs text-gray-400">${issue.status}</span>
+        ${issue.updated ? `<span class="text-gray-300">·</span><span class="text-xs text-gray-400">${issue.updated}</span>` : ''}
+      </div>
+    </div>
+  `).join('');
+}
+
+// ── Select + load analysis ─────────────────────────────────────────────────
+async function selectIssue(key) {
+  activeKey = key;
+
+  // Highlight sidebar row
+  document.querySelectorAll('.issue-row').forEach(r => {
+    r.classList.toggle('active', r.dataset.key === key);
+  });
+
+  clearMain();
+
+  const issue = allIssues.find(i => i.key === key);
+
+  try {
+    const res = await fetch(`/api/analysis/${key}`);
+    if (res.status === 404) {
+      showNoAnalysis(key);
+      return;
+    }
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    const md = await res.text();
+    showAnalysis(key, issue, md);
+  } catch (e) {
+    showNoAnalysis(key);
+  }
+}
+
+function showAnalysis(key, issue, md) {
+  $('placeholder').classList.add('hidden');
+  $('no-analysis').classList.add('hidden');
+  $('analysis-panel').classList.remove('hidden');
+
+  // Header
+  const badge = issue?.analyzed
+    ? (issue.stale
+        ? '<span class="bg-yellow-100 text-yellow-700 text-xs px-2 py-0.5 rounded font-medium">stale</span>'
+        : '<span class="bg-green-100 text-green-700 text-xs px-2 py-0.5 rounded font-medium">✓ analyzed</span>')
+    : '';
+  const sources = (issue?.contextSources || []).join(', ');
+  const jiraUrl = `https://jira.itg.ti.com/browse/${key}`;
+
+  $('analysis-header').innerHTML = `
+    <div>
+      <div class="flex items-center gap-2 mb-1">
+        <a href="${jiraUrl}" target="_blank" class="font-mono text-blue-600 font-bold hover:underline">${key}</a>
+        ${badge}
+        ${sources ? `<span class="text-xs text-gray-400">via ${sources}</span>` : ''}
+      </div>
+      ${issue ? `<p class="text-gray-600 text-xs">${escHtml(issue.summary)}</p>` : ''}
+    </div>
+    <a href="${jiraUrl}" target="_blank"
+       class="text-xs text-blue-500 hover:underline flex-shrink-0 mt-1">Open in Jira ↗</a>
+  `;
+
+  // Render markdown
+  const html = DOMPurify.sanitize(marked.parse(md));
+  $('analysis-content').innerHTML = html;
+}
+
+function showNoAnalysis(key) {
+  $('placeholder').classList.add('hidden');
+  $('analysis-panel').classList.add('hidden');
+  $('no-analysis').classList.remove('hidden');
+  $('no-analysis-key').textContent = key;
+  $('no-analysis-key2').textContent = key;
+}
+
+function clearMain() {
+  $('placeholder').classList.add('hidden');
+  $('analysis-panel').classList.add('hidden');
+  $('no-analysis').classList.add('hidden');
+}
+
+// ── Search ─────────────────────────────────────────────────────────────────
+let searchTimer = null;
+
+$('search-box').addEventListener('input', e => {
+  const q = e.target.value.trim();
+  clearTimeout(searchTimer);
+  if (!q) {
+    closeSearch();
+    renderSidebar(allIssues);
+    return;
+  }
+  // Local filter first
+  const local = allIssues.filter(i =>
+    i.key.toLowerCase().includes(q.toLowerCase()) ||
+    i.summary.toLowerCase().includes(q.toLowerCase())
+  );
+  renderSidebar(local);
+});
+
+$('search-box').addEventListener('keydown', async e => {
+  if (e.key !== 'Enter') return;
+  const q = $('search-box').value.trim();
+  if (!q) return;
+  await universalSearch(q);
+});
+
+async function universalSearch(q) {
+  const box = $('search-results');
+  box.innerHTML = '<div class="p-2 text-gray-400 text-xs">Searching Jira…</div>';
+  box.classList.remove('hidden');
+
+  try {
+    const res = await fetch(`/api/search?q=${encodeURIComponent(q)}`);
+    const data = await res.json();
+    if (!data.issues?.length) {
+      box.innerHTML = '<div class="p-2 text-gray-400 text-xs">No results.</div>';
+      return;
+    }
+    box.innerHTML = data.issues.map(i => `
+      <div class="px-3 py-2 hover:bg-blue-50 cursor-pointer border-b border-gray-100"
+           onclick="addAndSelect('${i.key}', ${JSON.stringify(i).replace(/"/g,'&quot;')})">
+        <div class="flex items-center gap-2">
+          <span class="font-mono text-xs text-gray-500">${i.key}</span>
+          <span class="text-xs text-gray-400">${i.status}</span>
+        </div>
+        <div class="text-xs font-medium text-gray-800 line-clamp-1">${escHtml(i.summary)}</div>
+      </div>
+    `).join('');
+  } catch (e) {
+    box.innerHTML = `<div class="p-2 text-red-500 text-xs">${e.message}</div>`;
+  }
+}
+
+function addAndSelect(key, issue) {
+  closeSearch();
+  if (!allIssues.find(i => i.key === key)) {
+    allIssues.unshift(issue);
+    renderSidebar(allIssues);
+  }
+  selectIssue(key);
+}
+
+function closeSearch() {
+  $('search-results').classList.add('hidden');
+  $('search-results').innerHTML = '';
+}
+
+document.addEventListener('click', e => {
+  if (!e.target.closest('#search-box') && !e.target.closest('#search-results')) closeSearch();
+});
+
+// ── Misc ───────────────────────────────────────────────────────────────────
+function escHtml(s) {
+  return (s || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+function reload() { loadIssues(activeFilter); }
+
+// Filter tab clicks
+document.querySelectorAll('.filter-btn').forEach(btn => {
+  btn.addEventListener('click', () => loadIssues(btn.dataset.filter));
+});
+
+// ── Boot ───────────────────────────────────────────────────────────────────
+loadIssues('all_open');
+</script>
+</body>
+</html>

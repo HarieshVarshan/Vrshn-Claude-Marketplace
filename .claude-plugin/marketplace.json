@@ -64,6 +64,11 @@
             "name": "mira",
             "description": "Smart Jira task manager for PDK sprints — creates/updates issues via hashtag routing (#jira, #review, #bug, #chores, #meetings, #mira). Requires jira-mcp.",
             "source": "./skills/mira"
+        },
+        {
+            "name": "jira-headstart",
+            "description": "Nightly agent that deep-analyzes open Jira tickets using all MCP tools and local code repos, then serves a local dashboard at http://localhost:7337",
+            "source": "./skills/jira-headstart"
         }
     ]
 }

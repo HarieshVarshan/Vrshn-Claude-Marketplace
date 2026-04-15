@@ -1,0 +1,10 @@
+{
+    "name": "jira-headstart",
+    "description": "Nightly agent that deep-analyzes your open Jira tickets using Jira, Bitbucket, Confluence, PDS, Jenkins MCP tools and local code repos — saves rich markdown analyses locally and serves them via a dashboard web UI.",
+    "version": "1.0.0",
+    "author": {
+        "name": "Harieshvarshan",
+        "email": "harieshvarshan@example.com"
+    },
+    "keywords": ["jira", "analysis", "headstart", "dashboard", "pdk", "nightly"]
+}
