@@ -24,13 +24,13 @@ A collection of MCP (Model Context Protocol) server plugins for Claude Code.
 |--------|-------------|
 | [sprint-report-gen](./sprint-report-gen/) | Agent that generates sprint status reports from Jira comments |
 | [obsidian-vault](./obsidian-vault/) | Capture knowledge from Claude sessions into Obsidian vault |
+| [jira-headstart](./jira-headstart/) | Nightly agent — deep-analyzes open Jira tickets (Jira + Bitbucket + Confluence + PDS + local repos) and serves a local dashboard at :7337 |
 
 ### Skills
 
 | Skill | Command | Description |
 |-------|---------|-------------|
 | [mira](./skills/mira/) | `/mira` | Smart Jira task manager for PDK sprints — hashtag-routed issue creation (#jira, #review, #bug, #chores, #meetings, #mira) |
-| [jira-headstart](./skills/jira-headstart/) | agent | Nightly deep-analysis of open Jira tickets — Jira + Bitbucket + Confluence + PDS + local repos → local markdown + dashboard at :7337 |
 
 ## Quick Start
 

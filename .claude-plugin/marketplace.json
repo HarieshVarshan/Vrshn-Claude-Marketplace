@@ -68,7 +68,7 @@
         {
             "name": "jira-headstart",
             "description": "Nightly agent that deep-analyzes open Jira tickets using all MCP tools and local code repos, then serves a local dashboard at http://localhost:7337",
-            "source": "./skills/jira-headstart"
+            "source": "./jira-headstart"
         }
     ]
 }
