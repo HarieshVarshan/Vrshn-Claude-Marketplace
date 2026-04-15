@@ -22,6 +22,8 @@ Parse `$ARGUMENTS` and route to the correct Jira operation below.
 2. The non-hashtag portion is the **description/context**.
 3. Route to the matching mode below. If multiple hashtags are present, process each one.
 4. `#ocd` and `#done` are no-ops — acknowledge them and stop.
+5. **Get the current user** (once, reuse for all issue creation in this invocation):
+   - `jira_get_current_user` → note the `name` (username) field.
 
 ---
 
@@ -42,6 +44,7 @@ Triggered when `$ARGUMENTS` is exactly `create base jiras` (case-insensitive).
      - `issue_type`: `Task`
      - `summary`: `{sprint_name}: chores, meetings and miscs`
      - `labels`: `["PDK_SPRINT"]`
+     - `assignee`: current user (from Step 0)
    - Do **not** blindly copy fields from the reference jira — populate only what makes sense.
 
 3. **Add to active sprint:**
@@ -77,6 +80,7 @@ The description should contain a component and subject, e.g.:
      - `summary`: `<component>: <subject>`
      - `description`: Contextual description built from the input (include URLs, PR links, or any extra context found in the description).
      - `labels`: `["PDK_SPRINT"]`
+     - `assignee`: current user (from Step 0)
      - `components`: Set to `[<component>]` if the component matches a known PDK component. If unsure, leave blank — do not guess.
    - Update fields based on context. Do **not** blindly clone the reference jira.
 
@@ -112,6 +116,7 @@ Same as Mode B (`#jira`) with one difference:
      - `summary`: `<component>: <subject>` (or just `<subject>` if no component is clear)
      - `description`: Contextual description built from input (include error details, URLs, steps to reproduce if mentioned).
      - `labels`: `["PDK_SPRINT"]`
+     - `assignee`: current user (from Step 0)
      - `priority`: Set based on context (Critical/High/Medium/Low). Default to `Medium` if unspecified.
    - Do **not** blindly copy fields from the reference bug.
 
@@ -182,6 +187,7 @@ Acknowledge and stop: `Noted. No Jira action taken for #ocd/#done.`
 
 ## General Rules
 
+- **Always assign to the current user** — call `jira_get_current_user` in Step 0 and pass the username as `assignee` on every `jira_create_issue` call.
 - **Always add `PDK_SPRINT` to labels** so issues appear in the PDK sprint board.
 - **Use `jira_move_issues_to_sprint`** after creating any issue to attach it to the active sprint.
 - **Do not blindly copy fields from reference jiras** — they are structural guides only. Fill fields based on the actual context.
