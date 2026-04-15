@@ -1,0 +1,10 @@
+{
+    "name": "mira",
+    "description": "Smart Jira task manager for PDK sprints — creates/updates issues via hashtag routing (#jira, #review, #bug, #chores, #meetings, #mira). Requires jira-mcp plugin.",
+    "version": "1.0.0",
+    "author": {
+        "name": "Harieshvarshan",
+        "email": "harieshvarshan@example.com"
+    },
+    "keywords": ["jira", "pdk", "sprint", "task-management", "skill"]
+}

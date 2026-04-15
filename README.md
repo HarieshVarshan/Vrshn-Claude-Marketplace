@@ -25,6 +25,12 @@ A collection of MCP (Model Context Protocol) server plugins for Claude Code.
 | [sprint-report-gen](./sprint-report-gen/) | Agent that generates sprint status reports from Jira comments |
 | [obsidian-vault](./obsidian-vault/) | Capture knowledge from Claude sessions into Obsidian vault |
 
+### Skills
+
+| Skill | Command | Description |
+|-------|---------|-------------|
+| [mira](./skills/mira/) | `/mira` | Smart Jira task manager for PDK sprints — hashtag-routed issue creation (#jira, #review, #bug, #chores, #meetings, #mira) |
+
 ## Quick Start
 
 ### Step 1: Add This Marketplace to Claude Code

@@ -59,6 +59,11 @@
             "name": "webex-mcp",
             "description": "MCP server for Cisco Webex - messaging, teams, rooms, memberships, and webhooks",
             "source": "./webex-mcp"
+        },
+        {
+            "name": "mira",
+            "description": "Smart Jira task manager for PDK sprints — creates/updates issues via hashtag routing (#jira, #review, #bug, #chores, #meetings, #mira). Requires jira-mcp.",
+            "source": "./skills/mira"
         }
     ]
 }
