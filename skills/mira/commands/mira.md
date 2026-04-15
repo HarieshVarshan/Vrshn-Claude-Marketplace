@@ -167,7 +167,7 @@ Used when a Jira already exists and you want to add context (e.g., a PR link, st
    - Read the current summary, description, and comments.
 
 3. **Determine what to update** based on the context provided:
-   - If a **PR link** or URL is provided → add it to the description under a `## References` section.
+   - If a **PR link** or URL is provided → add it to the description under a `h2. References` section (Jira Wiki Markup).
    - If **progress notes** or status info is provided → add a comment summarizing the update.
    - If both → update description and add a comment.
 
@@ -195,6 +195,31 @@ Acknowledge and stop: `Noted. No Jira action taken for #ocd/#done.`
 - **Components** — only set if you can confidently identify the component from the input. Do not guess.
 - **Fail fast** — if the active sprint cannot be found, stop and tell the user instead of proceeding without a sprint.
 - **Be concise** when reporting — show the issue key, summary, and Jira URL. Skip verbose recaps.
+
+### Description Formatting — Jira Wiki Markup (CRITICAL)
+
+The Jira REST API v2 uses **Jira Wiki Markup**, NOT Markdown. Always write `description` fields using the following syntax:
+
+| Element | Jira Wiki Markup | ❌ Do NOT use (Markdown) |
+|---------|-----------------|--------------------------|
+| Heading | `h2. References` | `## References` |
+| Bold | `*bold*` | `**bold**` |
+| Bullet list | `* item` | `- item` |
+| Numbered list | `# item` | `1. item` |
+| Link | `[Display Text\|URL]` or bare URL | `[text](url)` |
+| Monospace | `{{code}}` | `` `code` `` |
+
+**Example correct description:**
+
+```
+Integrate the J722S promotion logic into the MCU+ SDK CD sync pipeline.
+
+h2. References
+
+* PR: https://bitbucket.itg.ti.com/projects/SITMPUSW/repos/cd-sync/pull-requests/12/overview
+```
+
+Using `##` instead of `h2.` causes Jira to render headings as nested ordered list items.
 
 ---
 
