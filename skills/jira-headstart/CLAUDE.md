@@ -45,12 +45,13 @@ Or for a single ticket:
 run jira-headstart for PDK-19948
 ```
 
-### 4. Set up nightly cron (optional)
+### 4. Set up nightly cron (TODO — not yet working)
 
 ```bash
-# Add to crontab — runs at 10:30 PM every night
-crontab -e
-# Add this line:
+# NOTE: Disabled — claude --print doesn't load MCP servers in non-interactive mode.
+# Needs investigation before enabling.
+#
+# crontab -e
 # 30 22 * * * claude --print "run the jira-headstart agent" >> ~/.local/share/jira-headstart/cron.log 2>&1
 ```
 
