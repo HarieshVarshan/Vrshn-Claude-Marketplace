@@ -44,6 +44,11 @@
     .badge-analyzed { background:#dcfce7; color:#15803d; }
     .badge-stale    { background:#fef9c3; color:#854d0e; }
     .badge-none     { background:#f3f4f6; color:#6b7280; }
+
+    /* Secondary filter chips */
+    .type-chip { cursor:pointer; transition:background .1s, color .1s; }
+    .type-chip.active { background:#1d4ed8; color:#fff; }
+    .analyzed-toggle.active { background:#15803d; color:#fff; }
   </style>
 </head>
 <body class="bg-gray-50 h-screen flex flex-col text-sm font-sans">
@@ -76,6 +81,16 @@
   </div>
 </header>
 
+<!-- ── Secondary filters ────────────────────────────────────────────────── -->
+<div class="bg-white border-b border-gray-100 px-4 py-1.5 flex items-center gap-2 flex-shrink-0">
+  <span class="text-xs text-gray-400 mr-1">Type:</span>
+  <div id="type-chips" class="flex gap-1 flex-wrap"></div>
+  <div class="mx-2 h-4 border-l border-gray-200"></div>
+  <button id="analyzed-toggle"
+    class="analyzed-toggle px-2.5 py-0.5 rounded text-xs font-medium bg-gray-100 text-gray-600 hover:bg-gray-200 transition"
+    onclick="toggleAnalyzed()">✓ Analyzed only</button>
+</div>
+
 <!-- ── Main layout ──────────────────────────────────────────────────────── -->
 <div class="flex flex-1 overflow-hidden">
 
@@ -106,9 +121,11 @@
 
 <script>
 // ── State ──────────────────────────────────────────────────────────────────
-let activeFilter = 'all_open';
-let activeKey = null;
-let allIssues = [];
+let activeFilter   = 'all_open';
+let activeKey      = null;
+let allIssues      = [];
+let activeType     = 'all';   // client-side type filter
+let onlyAnalyzed   = false;   // client-side analyzed toggle
 
 // ── Helpers ────────────────────────────────────────────────────────────────
 const $ = id => document.getElementById(id);
@@ -133,6 +150,42 @@ function typeColor(t) {
   return map[t] || 'text-gray-600';
 }
 
+// ── Secondary filters (client-side) ───────────────────────────────────────
+function buildTypeChips() {
+  const types = [...new Set(allIssues.map(i => i.type).filter(Boolean))].sort();
+  const chips = [['all', 'All'], ...types.map(t => [t, t])];
+  $('type-chips').innerHTML = chips.map(([val, label]) => `
+    <button class="type-chip px-2.5 py-0.5 rounded text-xs font-medium bg-gray-100 text-gray-600 hover:bg-gray-200 ${activeType === val ? 'active' : ''}"
+            onclick="setTypeFilter('${val}')">${escHtml(label)}</button>
+  `).join('');
+}
+
+function setTypeFilter(type) {
+  activeType = type;
+  buildTypeChips();
+  applyLocalFilters();
+}
+
+function toggleAnalyzed() {
+  onlyAnalyzed = !onlyAnalyzed;
+  const btn = $('analyzed-toggle');
+  btn.classList.toggle('active', onlyAnalyzed);
+  btn.classList.toggle('bg-gray-100', !onlyAnalyzed);
+  btn.classList.toggle('text-gray-600', !onlyAnalyzed);
+  applyLocalFilters();
+}
+
+function applyLocalFilters() {
+  const q = $('search-box').value.trim().toLowerCase();
+  let filtered = allIssues;
+  if (activeType !== 'all')  filtered = filtered.filter(i => i.type === activeType);
+  if (onlyAnalyzed)          filtered = filtered.filter(i => i.analyzed);
+  if (q)                     filtered = filtered.filter(i =>
+    i.key.toLowerCase().includes(q) || i.summary.toLowerCase().includes(q));
+  $('ticket-count').textContent = `${filtered.length} / ${allIssues.length} tickets`;
+  renderSidebar(filtered);
+}
+
 // ── Load issues ────────────────────────────────────────────────────────────
 async function loadIssues(filter) {
   activeFilter = filter;
@@ -152,9 +205,9 @@ async function loadIssues(filter) {
     if (data.error) throw new Error(data.error);
 
     allIssues = data.issues || [];
-    renderSidebar(allIssues);
-
-    $('ticket-count').textContent = `${allIssues.length} tickets`;
+    activeType = 'all';
+    buildTypeChips();
+    applyLocalFilters();
     if (data.lastRun) {
       const d = new Date(data.lastRun);
       $('last-run').textContent = `Last analysis: ${d.toLocaleDateString()} ${d.toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'})}`;
@@ -269,19 +322,9 @@ function clearMain() {
 let searchTimer = null;
 
 $('search-box').addEventListener('input', e => {
-  const q = e.target.value.trim();
   clearTimeout(searchTimer);
-  if (!q) {
-    closeSearch();
-    renderSidebar(allIssues);
-    return;
-  }
-  // Local filter first
-  const local = allIssues.filter(i =>
-    i.key.toLowerCase().includes(q.toLowerCase()) ||
-    i.summary.toLowerCase().includes(q.toLowerCase())
-  );
-  renderSidebar(local);
+  closeSearch();
+  applyLocalFilters();
 });
 
 $('search-box').addEventListener('keydown', async e => {
