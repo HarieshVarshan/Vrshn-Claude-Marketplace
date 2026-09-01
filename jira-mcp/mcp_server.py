@@ -182,7 +182,9 @@ async def list_tools() -> list[Tool]:
                     "assignee": {"type": "string", "description": "Assignee username"},
                     "labels": {"type": "array", "items": {"type": "string"}, "description": "Labels"},
                     "components": {"type": "array", "items": {"type": "string"}, "description": "Component names"},
-                    "fix_versions": {"type": "array", "items": {"type": "string"}, "description": "Fix version names"}
+                    "fix_versions": {"type": "array", "items": {"type": "string"}, "description": "Fix version names"},
+                    "affects_versions": {"type": "array", "items": {"type": "string"}, "description": "Affects Version/s — the version(s) where the bug was found"},
+                    "custom_fields": {"type": "object", "description": "Arbitrary custom fields as a flat key→value dict. Scalar values are sent as-is; use nested objects (e.g. {\"value\": \"foo\"}) for select/option fields. Example: {\"customfield_10302\": {\"value\": \"S2-Major\"}, \"customfield_12300\": \"steps text\"}"}
                 },
                 "required": ["project_key", "summary"]
             }
@@ -857,7 +859,9 @@ async def call_tool(name: str, arguments: dict[str, Any]) -> list[TextContent]:
                 assignee=arguments.get("assignee"),
                 labels=arguments.get("labels"),
                 components=arguments.get("components"),
-                fix_versions=arguments.get("fix_versions")
+                fix_versions=arguments.get("fix_versions"),
+                affects_versions=arguments.get("affects_versions"),
+                custom_fields=arguments.get("custom_fields"),
             )
             result = f"Issue created: **{created['key']}**\nURL: {client.base_url}/browse/{created['key']}"
 

@@ -118,18 +118,20 @@ class JiraClient:
         return response.json()
 
     def create_issue(self, project_key: str, summary: str, issue_type: str = "Task",
-                     description: str = "", priority: str = None,
-                     assignee: str = None, labels: List[str] = None,
-                     components: List[str] = None, fix_versions: List[str] = None,
-                     custom_fields: Dict[str, Any] = None) -> Dict[str, Any]:
+                     description: str = "", priority: Optional[str] = None,
+                     assignee: Optional[str] = None, labels: Optional[List[str]] = None,
+                     components: Optional[List[str]] = None, fix_versions: Optional[List[str]] = None,
+                     affects_versions: Optional[List[str]] = None,
+                     custom_fields: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
         """Create a new Jira issue."""
         url = f"{self.base_url}/rest/api/2/issue"
         fields: Dict[str, Any] = {
             'project': {'key': project_key},
             'summary': summary,
             'issuetype': {'name': issue_type},
-            'description': description
         }
+        if description:
+            fields['description'] = description
         if priority:
             fields['priority'] = {'name': priority}
         if assignee:
@@ -140,11 +142,18 @@ class JiraClient:
             fields['components'] = [{'name': c} for c in components]
         if fix_versions:
             fields['fixVersions'] = [{'name': v} for v in fix_versions]
+        if affects_versions:
+            fields['versions'] = [{'name': v} for v in affects_versions]
         if custom_fields:
             fields.update(custom_fields)
 
         response = self.session.post(url, json={'fields': fields})
-        response.raise_for_status()
+        if not response.ok:
+            try:
+                detail = response.json()
+            except Exception:
+                detail = response.text
+            raise Exception(f"Jira API error [{response.status_code}]: {detail}")
         return response.json()
 
     def update_issue(self, issue_key_or_url: str, fields: Dict[str, Any]) -> None:
