@@ -65,7 +65,7 @@ def format_issue(issue: dict) -> str:
 
     output.append("")
     output.append("## Description")
-    desc = rendered.get('description') or fields.get('description') or 'No description'
+    desc = fields.get('description') or rendered.get('description') or 'No description'
     output.append(desc)
 
     # Include comments if available
